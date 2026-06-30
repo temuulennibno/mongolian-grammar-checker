@@ -3,6 +3,7 @@ node_modules/
 
 # build artifacts
 web-store.zip
+mongolian-spell-checker-v*.zip
 
 # generated test bundles + copied dictionaries
 test/*.bundle.js

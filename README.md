@@ -5,7 +5,7 @@ directly in text fields on any website and offers one-click corrections. Runs
 **fully offline** using a Hunspell dictionary (~605,000 word forms) compiled to
 WebAssembly.
 
-### ▶️ [Try the live demo](https://temuulennibno.github.io/mongolian-grammar-checker/) (no install needed)
+### ▶️ [Try the live demo](https://temuulennibno.github.io/mongolian-grammar-checker/) (no install needed) · 📥 [Install guide](INSTALL.md) · [Releases](https://github.com/temuulennibno/mongolian-grammar-checker/releases)
 
 ![Mongolian Spell Checker in action](assets/preview.png)
 
