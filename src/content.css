@@ -1,0 +1,90 @@
+.mn-spell-mirror {
+  position: fixed;
+  z-index: 2147483646;
+  pointer-events: none;
+  overflow: hidden;
+  margin: 0;
+  background: transparent;
+}
+
+.mn-spell-mirror-inner {
+  margin: 0;
+  color: transparent;
+  background: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.mn-spell-bad {
+  background-color: rgba(229, 57, 53, 0.18);
+  border-bottom: 2px solid #e53935;
+  border-radius: 2px;
+}
+
+/* contenteditable: full-viewport overlay holding per-word underline rects */
+.mn-spell-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.mn-spell-underline {
+  position: fixed;
+  pointer-events: none;
+  box-sizing: border-box;
+  background-color: rgba(229, 57, 53, 0.18);
+  border-bottom: 2px solid #e53935;
+  border-radius: 2px;
+}
+
+.mn-spell-tip {
+  position: fixed;
+  z-index: 2147483647;
+  min-width: 160px;
+  max-width: 240px;
+  max-height: 280px;
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid #d0d0d0;
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.16);
+  padding: 6px;
+  font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+  font-size: 14px;
+  color: #1a1a1a;
+}
+
+.mn-spell-tip-head {
+  font-weight: 600;
+  color: #c0392b;
+  padding: 4px 8px 6px;
+  border-bottom: 1px solid #eee;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mn-spell-tip-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 6px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.mn-spell-tip-item:hover {
+  background: #f0f4ff;
+}
+
+.mn-spell-tip-none {
+  padding: 6px 8px;
+  color: #888;
+  font-style: italic;
+}

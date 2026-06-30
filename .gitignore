@@ -1,0 +1,20 @@
+.DS_Store
+node_modules/
+
+# build artifacts
+web-store.zip
+
+# generated test bundles + copied dictionaries
+test/*.bundle.js
+test/*.dic
+test/*.aff
+
+# generated demo assets (rebuilt by `npm run demo`)
+demo/content.js
+demo/content.css
+demo/demo-setup.bundle.js
+demo/mn_MN.aff
+demo/mn_MN.dic
+
+# local machine-specific settings
+.claude/settings.local.json

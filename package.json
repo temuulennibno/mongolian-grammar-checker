@@ -1,0 +1,27 @@
+{
+  "name": "mongolian-grammar-checker",
+  "version": "1.0.0",
+  "description": "Chrome extension for offline Mongolian (Cyrillic) spell/typo checking.",
+  "type": "module",
+  "scripts": {
+    "icons": "node generate-icons.mjs",
+    "build": "node build.mjs",
+    "prepare-dist": "npm run icons && npm run build",
+    "demo": "npm run build && node build-demo.mjs",
+    "demo:serve": "npm run demo && python3 -m http.server -d demo 8000",
+    "package": "npm run prepare-dist && node package-extension.mjs"
+  },
+  "keywords": [
+    "mongolian",
+    "spellcheck",
+    "hunspell",
+    "chrome-extension"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "hunspell-asm": "^4.0.2"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.2"
+  }
+}

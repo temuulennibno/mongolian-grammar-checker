@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="mn">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Монгол зөв бичих · Demo</title>
+  <link rel="stylesheet" href="content.css">
+  <style>
+    :root { --ink:#1a1a1a; --muted:#6b6b6f; --line:#e3e3e6; --accent:#255cb8; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; color: var(--ink); background: #f6f6f7;
+      font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+      line-height: 1.5;
+    }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 32px 20px 80px; }
+    header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    h1 { font-size: 22px; margin: 0; }
+    .status {
+      font-size: 13px; padding: 4px 10px; border-radius: 999px;
+      background: #ecebef; color: var(--muted); white-space: nowrap;
+    }
+    .status.loading { background: #fff4e0; color: #8a5a00; }
+    .status.ready { background: #e4f3e7; color: #2e7d32; }
+    .lede { color: var(--muted); font-size: 14px; margin: 8px 0 24px; }
+    .card {
+      background: #fff; border: 1px solid var(--line); border-radius: 10px;
+      padding: 16px; margin: 16px 0;
+    }
+    .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 10px; }
+    textarea, input.field {
+      width: 100%; border: 1px solid var(--line); border-radius: 8px;
+      padding: 12px; font-size: 17px; font-family: Georgia, "Times New Roman", serif;
+      color: var(--ink); background: #fff;
+    }
+    textarea { height: 110px; resize: vertical; line-height: 1.55; }
+    .editable {
+      border: 1px solid var(--line); border-radius: 8px; padding: 12px;
+      font-size: 17px; font-family: Georgia, "Times New Roman", serif;
+      min-height: 64px; line-height: 1.6; background: #fff;
+    }
+    .hint { font-size: 13px; color: var(--muted); margin-top: 8px; }
+    .steps { font-size: 14px; color: var(--muted); padding-left: 18px; }
+    .steps li { margin: 4px 0; }
+    footer { margin-top: 28px; font-size: 12px; color: var(--muted); }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Монгол зөв бичих</h1>
+      <span class="status loading" id="status">Толь ачаалж байна…</span>
+    </header>
+    <p class="lede">
+      Энэ нь өргөтгөл (extension) суулгахгүйгээр ажилладаг демо. Доорх талбаруудад
+      монгол бичвэр бичихэд алдаатай үгс улаанаар тодруулагдана.
+      Алдаатай үг дээр дарж зөв хувилбарыг сонгоно уу.
+    </p>
+    <ol class="steps">
+      <li>Доорх аль нэг талбар дээр дарж монголоор бичнэ үү (жишээ бичвэр бэлэн байгаа).</li>
+      <li>Алдаатай үг улаанаар тодруулагдана.</li>
+      <li>Тэр үг дээр дарж саналуудаас зөвийг нь сонгоно.</li>
+    </ol>
+
+    <div class="card">
+      <h2>1 · Энгийн текст талбар (textarea)</h2>
+      <textarea id="ta">Сайн байна уу. Энэ бол монггол хэлний зөв бичгийн шалгагчийн жишээ өгүүлбэр юм.</textarea>
+    </div>
+
+    <div class="card">
+      <h2>2 · Засварлагдах хэсэг (contenteditable, жишээ нь Gmail)</h2>
+      <div id="ce" class="editable" contenteditable="true">Өнөөдөр цаг агаар сайхан байнаа. Бид хамтдаа явъя гэж бодож байнна.</div>
+      <p class="hint">Энэ нь Gmail, олон нийтийн сүлжээ зэрэг баялаг засварлагчтай ижил зарчмаар ажиллана.</p>
+    </div>
+
+    <div class="card">
+      <h2>3 · Нэг мөрт оролт (input)</h2>
+      <input id="inp" class="field" type="text" value="нийслэл хотод тавтай морилно уу">
+    </div>
+
+    <footer>
+      Зөвхөн зөв бичгийн шалгалт.
+    </footer>
+  </div>
+
+  <!-- engine + chrome shim must load before the real content script -->
+  <script src="demo-setup.bundle.js"></script>
+  <script src="content.js"></script>
+  <script>
+    const s = document.getElementById('status');
+    window.addEventListener('mn-ready', () => {
+      s.textContent = 'Бэлэн';
+      s.className = 'status ready';
+    });
+  </script>
+</body>
+</html>

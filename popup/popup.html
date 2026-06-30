@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="mn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="popup.css" />
+  <title>Монгол зөв бичих</title>
+</head>
+<body>
+  <header class="bar">
+    <span class="title">Монгол зөв бичих</span>
+    <span class="status" id="status">Толь ачаалж байна…</span>
+  </header>
+
+  <div class="editor">
+    <div class="mirror" id="mirror"><div class="mirror-inner" id="mirrorInner"></div></div>
+    <textarea id="input" spellcheck="false" placeholder="Энд монгол бичвэрээ оруулна уу..."></textarea>
+  </div>
+
+  <footer class="bar foot">
+    <span id="summary">&nbsp;</span>
+    <button id="clear" type="button">Цэвэрлэх</button>
+  </footer>
+
+  <div class="tip" id="tip" hidden></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
