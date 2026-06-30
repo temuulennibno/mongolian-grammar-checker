@@ -9,7 +9,7 @@ WebAssembly.
 
 ### ▶️ [Try the live demo](https://temuulennibno.github.io/mongolian-grammar-checker/) (no install needed) · 📥 [Install guide](INSTALL.md) · [Releases](https://github.com/temuulennibno/mongolian-grammar-checker/releases)
 
-![Mongolian Spell Checker in action](assets/preview.png)
+![Mongolian Spell Checker in action](assets/demo.gif)
 
 ![Manifest V3](https://img.shields.io/badge/Manifest-V3-blue)
 ![Offline](https://img.shields.io/badge/runs-100%25%20offline-success)

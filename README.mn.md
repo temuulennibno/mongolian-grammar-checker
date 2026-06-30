@@ -9,7 +9,7 @@
 
 ### ▶️ [Шууд туршиж үзэх](https://temuulennibno.github.io/mongolian-grammar-checker/) (суулгах шаардлагагүй) · 📥 [Суулгах заавар](INSTALL.mn.md) · [Хувилбарууд](https://github.com/temuulennibno/mongolian-grammar-checker/releases)
 
-![Mongolian Spell Checker in action](assets/preview.png)
+![Mongolian Spell Checker in action](assets/demo.gif)
 
 ![Manifest V3](https://img.shields.io/badge/Manifest-V3-blue)
 ![Offline](https://img.shields.io/badge/runs-100%25%20offline-success)
