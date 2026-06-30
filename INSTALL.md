@@ -1,5 +1,7 @@
 # Installation guide (without the Chrome Web Store)
 
+**English** | [Монгол](INSTALL.mn.md)
+
 You can install this extension manually in under a minute. No store account, no
 payment, works on **Chrome, Edge, Brave, Opera, and Arc** (any Chromium browser).
 
@@ -26,7 +28,7 @@ payment, works on **Chrome, Edge, Brave, Opera, and Arc** (any Chromium browser)
 ## Option B — Install from source
 
 ```bash
-git clone https://github.com/temuulennibno/mongolian-spell-checker.git
+git clone https://github.com/temuulennibno/mongolian-grammar-checker.git
 cd mongolian-grammar-checker
 npm install
 npm run prepare-dist     # builds dist/sw.js and dist/content.js

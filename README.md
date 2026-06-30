@@ -1,5 +1,7 @@
 # Монгол зөв бичих · Mongolian Spell Checker (Chrome extension)
 
+**English** | [Монгол](README.mn.md)
+
 A Chrome extension that underlines misspelled **Mongolian (Cyrillic)** words
 directly in text fields on any website and offers one-click corrections. Runs
 **fully offline** using a Hunspell dictionary (~605,000 word forms) compiled to
