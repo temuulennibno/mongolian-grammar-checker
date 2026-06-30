@@ -44,14 +44,22 @@
       const res = await send({ type: "suggest", word });
       return res.ok ? res.suggestions : [];
     }
+    const ADJACENT = /[A-Za-z0-9_@./\\-]/;
     function tokenize(text) {
       const tokens = [];
       const seen = /* @__PURE__ */ new Set();
       let m;
       MN_WORD.lastIndex = 0;
       while ((m = MN_WORD.exec(text)) !== null) {
-        tokens.push({ start: m.index, end: m.index + m[0].length, word: m[0] });
-        seen.add(m[0]);
+        const word = m[0];
+        const start = m.index;
+        const end = start + word.length;
+        if (word.length < 2) continue;
+        const before = start > 0 ? text[start - 1] : "";
+        const after = end < text.length ? text[end] : "";
+        if (ADJACENT.test(before) || ADJACENT.test(after)) continue;
+        tokens.push({ start, end, word });
+        seen.add(word);
       }
       return { tokens, seen };
     }
@@ -382,8 +390,10 @@
           } catch {
             continue;
           }
+          item.rects = [];
           for (const r of rects) {
             if (r.width === 0 || r.height === 0) continue;
+            item.rects.push(r);
             const u = document.createElement("div");
             u.className = "mn-spell-underline";
             u.style.left = r.left + "px";
@@ -394,29 +404,36 @@
           }
         }
       }
-      // Map the current selection caret back to a flat index to find the word.
       handleClick(e) {
-        const sel = window.getSelection();
-        if (!sel || sel.rangeCount === 0) return;
-        const { text, segments } = this.buildTextMap();
-        const anchor = sel.anchorNode;
-        const anchorOffset = sel.anchorOffset;
-        let pos = null;
-        for (const seg of segments) {
-          if (seg.node === anchor) {
-            pos = seg.start + anchorOffset;
-            break;
+        const { segments } = this.buildTextMap();
+        const PAD = 3;
+        for (const m of this.misspelled) {
+          for (const r of m.rects || []) {
+            if (e.clientX >= r.left - PAD && e.clientX <= r.right + PAD && e.clientY >= r.top - PAD && e.clientY <= r.bottom + PAD) {
+              const token = this.tokenForWord(segments, m);
+              if (token) {
+                showTip(m.word, e.clientX, e.clientY, (s) => this.applyFix(segments, token, s));
+                return;
+              }
+            }
           }
         }
-        if (pos == null) return hideTip();
+        hideTip();
+      }
+      // Find the flat-text token matching a misspelled item, preferring the one
+      // whose range starts at the same place (handles repeated words correctly).
+      tokenForWord(segments, item) {
+        const { text } = this.buildTextMap();
         const { tokens } = tokenize(text);
-        const hit = tokens.find((t) => pos >= t.start && pos <= t.end);
-        const bad = hit && this.misspelled.find((m) => m.word === hit.word);
-        if (hit && bad) {
-          showTip(hit.word, e.clientX, e.clientY, (s) => this.applyFix(segments, hit, s));
-        } else {
-          hideTip();
+        const candidates = tokens.filter((t) => t.word === item.word);
+        if (!candidates.length) return null;
+        for (const t of candidates) {
+          const range = this.rangeFor(segments, t.start, t.end);
+          if (range && range.compareBoundaryPoints(Range.START_TO_START, item.range) === 0) {
+            return t;
+          }
         }
+        return candidates[0];
       }
       applyFix(segments, token, replacement) {
         const range = this.rangeFor(segments, token.start, token.end);

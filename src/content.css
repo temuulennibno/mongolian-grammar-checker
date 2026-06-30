@@ -15,9 +15,7 @@
 }
 
 .mn-spell-bad {
-  background-color: rgba(229, 57, 53, 0.18);
   border-bottom: 2px solid #e53935;
-  border-radius: 2px;
 }
 
 /* contenteditable: full-viewport overlay holding per-word underline rects */
@@ -33,9 +31,7 @@
   position: fixed;
   pointer-events: none;
   box-sizing: border-box;
-  background-color: rgba(229, 57, 53, 0.18);
   border-bottom: 2px solid #e53935;
-  border-radius: 2px;
 }
 
 .mn-spell-tip {
