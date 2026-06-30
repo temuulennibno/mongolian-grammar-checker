@@ -5,6 +5,13 @@ directly in text fields on any website and offers one-click corrections. Runs
 **fully offline** using a Hunspell dictionary (~605,000 word forms) compiled to
 WebAssembly.
 
+![Mongolian Spell Checker in action](assets/preview.png)
+
+![Manifest V3](https://img.shields.io/badge/Manifest-V3-blue)
+![Offline](https://img.shields.io/badge/runs-100%25%20offline-success)
+![License: MIT](https://img.shields.io/badge/code-MIT-green)
+![Dictionary: LPPL-1.3c](https://img.shields.io/badge/dictionary-LPPL--1.3c-orange)
+
 ## What it does
 
 - **Inline checking on any page** – focus a `<textarea>`, a text `<input>`, or
@@ -83,7 +90,7 @@ content.js  ──port──►  sw.js (service worker)  ──►  hunspell-asm
 | `src/content.js` | Inline field checker (bundled → `dist/content.js`) |
 | `src/content.css` | Highlight + suggestion-tooltip styles |
 | `popup/` | Toolbar popup quick-checker |
-| `dict/` | `mn_MN.aff` + `mn_MN.dic` dictionary data |
+| `dict/` | `mn_MN.aff` + `mn_MN.dic` from [dict-mn](https://github.com/bataak/dict-mn) |
 | `build.mjs` | esbuild bundling (forces CJS `main` to avoid a nanoid bug) |
 | `generate-icons.mjs` | Generates `icons/*.png` |
 | `test/` | Standalone browser harness used to verify the WASM engine |
@@ -92,9 +99,19 @@ content.js  ──port──►  sw.js (service worker)  ──►  hunspell-asm
 
 - Per-site enable/disable and a personal "ignore words" list.
 
+## Credits
+
+- **Dictionary**: the Mongolian Hunspell data (`mn_MN.aff` / `mn_MN.dic`) comes
+  from the [**dict-mn**](https://github.com/bataak/dict-mn) project by Batmunkh
+  Dorjgotov. Huge thanks to that project, which makes offline Mongolian
+  spell-checking possible. Please consider starring and supporting it.
+- **Engine**: [`hunspell-asm`](https://github.com/kwonoj/hunspell-asm) (Hunspell
+  compiled to WebAssembly).
+
 ## License
 
-- Extension code: MIT.
-- The Mongolian dictionary data in `dict/` is distributed under the
-  **LPPL-1.3c** license; see `dict/LICENSE`. The bundled `mn_MN.aff` /
-  `mn_MN.dic` retain that license and their original copyright notices.
+- Extension code: **MIT** (see [`LICENSE`](LICENSE)).
+- Dictionary data in `dict/`: **LPPL-1.3c**, from
+  [dict-mn](https://github.com/bataak/dict-mn) (see [`dict/LICENSE`](dict/LICENSE)).
+  The bundled `mn_MN.aff` / `mn_MN.dic` retain that license and their original
+  copyright notices.
