@@ -5,6 +5,8 @@ directly in text fields on any website and offers one-click corrections. Runs
 **fully offline** using a Hunspell dictionary (~605,000 word forms) compiled to
 WebAssembly.
 
+### ▶️ [Try the live demo](https://temuulennibno.github.io/mongolian-grammar-checker/) (no install needed)
+
 ![Mongolian Spell Checker in action](assets/preview.png)
 
 ![Manifest V3](https://img.shields.io/badge/Manifest-V3-blue)
@@ -31,9 +33,11 @@ WebAssembly.
 
 ## Try it with no install (web demo)
 
+**Live demo:** <https://temuulennibno.github.io/mongolian-grammar-checker/>
+
 The `demo/` folder runs the **exact same** engine and checker code in a normal
 web page, using a tiny `chrome.*` shim, so you can see the whole process without
-loading an extension.
+loading an extension. To run it locally instead:
 
 ```bash
 npm install
