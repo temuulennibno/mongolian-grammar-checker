@@ -95,13 +95,28 @@ import { detectExtras } from './checks.js';
   }
 
   // ---- shared suggestion tooltip ------------------------------------------
+  const HOVER_MS = 500;      // dwell before hovering a word opens its suggestions
+  const HOVER_CLOSE_MS = 400; // grace period to move onto the popover before it closes
+
   let tipEl = null;
   let tipCloser = null;
   let tipKeyHandler = null;
   let tipActions = []; // [{ el, run }] — keyboard-navigable rows
   let tipIndex = -1;
+  let tipItem = null;      // flag currently shown
+  let tipByHover = false;  // opened by hover (auto-closes) vs click
+  let tipCloseTimer = null;
+
+  function scheduleTipClose() {
+    clearTimeout(tipCloseTimer);
+    tipCloseTimer = setTimeout(hideTip, HOVER_CLOSE_MS);
+  }
+  function cancelTipClose() {
+    clearTimeout(tipCloseTimer);
+  }
 
   function hideTip() {
+    clearTimeout(tipCloseTimer);
     if (tipEl) {
       tipEl.remove();
       tipEl = null;
@@ -116,6 +131,8 @@ import { detectExtras } from './checks.js';
     }
     tipActions = [];
     tipIndex = -1;
+    tipItem = null;
+    tipByHover = false;
   }
 
   function setTipActive(i) {
@@ -138,7 +155,7 @@ import { detectExtras } from './checks.js';
   // Show suggestions for a flagged item. `item` has { word, display?, kind,
   // suggestions? }. Spelling flags fetch suggestions from the engine lazily;
   // homoglyph/repeat flags carry their own preset suggestions.
-  async function showTip(item, x, y, onPick, onIgnore) {
+  async function showTip(item, x, y, onPick, onIgnore, hover = false) {
     hideTip();
     const tip = document.createElement('div');
     tip.className = 'mn-spell-tip';
@@ -147,11 +164,20 @@ import { detectExtras } from './checks.js';
     tip.style.top = Math.min(y + 14, window.innerHeight - 60) + 'px';
     document.body.appendChild(tip);
     tipEl = tip;
+    tipItem = item;
+    tipByHover = hover;
 
     tipCloser = (e) => {
       if (tipEl && !tipEl.contains(e.target)) hideTip();
     };
     setTimeout(() => document.addEventListener('mousedown', tipCloser, true), 0);
+
+    // A hover-opened tip stays while the pointer is over it, and closes shortly
+    // after the pointer leaves (the word's own mousemove handles re-entry).
+    if (hover) {
+      tip.addEventListener('mouseenter', cancelTipClose);
+      tip.addEventListener('mouseleave', scheduleTipClose);
+    }
 
     let suggestions;
     if (item.suggestions) {
@@ -278,6 +304,24 @@ import { detectExtras } from './checks.js';
     return best;
   }
 
+  // Shared hover-to-open logic. `itemAt` returns the flagged item under the
+  // pointer (or null); `openTip` shows its suggestions. Dwelling over a word
+  // for HOVER_MS opens it; leaving it lets an open hover-tip close.
+  function processHover(self, e, itemAt, openTip) {
+    const item = itemAt(e.clientX, e.clientY);
+    if (tipByHover && tipEl) {
+      if (item && item === tipItem) cancelTipClose();
+      else if (!item) scheduleTipClose();
+    }
+    if (item === self._hoverItem) return;
+    self._hoverItem = item;
+    clearTimeout(self._hoverTimer);
+    if (!item) return;
+    if (tipEl && tipItem === item) return; // already showing this one
+    const { clientX, clientY } = e;
+    self._hoverTimer = setTimeout(() => openTip(item, clientX, clientY), HOVER_MS);
+  }
+
   // Combine spelling flags with the extra (homoglyph/repeat) flags, dropping any
   // spelling flag that overlaps an extra one (the extra flag covers the whole
   // word and carries a better suggestion), then order by position.
@@ -334,11 +378,19 @@ import { detectExtras } from './checks.js';
       this.onInput = () => this.scheduleCheck();
       this.onScroll = () => this.syncScroll();
       this.onClick = (e) => this.handleClick(e);
+      this.onMove = (e) => this.handleHover(e);
+      this.onLeave = () => {
+        clearTimeout(this._hoverTimer);
+        this._hoverItem = null;
+        if (tipByHover && tipEl) scheduleTipClose();
+      };
       this.onReposition = () => this.reposition();
 
       el.addEventListener('input', this.onInput);
       el.addEventListener('scroll', this.onScroll);
       el.addEventListener('click', this.onClick);
+      el.addEventListener('mousemove', this.onMove);
+      el.addEventListener('mouseleave', this.onLeave);
       window.addEventListener('scroll', this.onReposition, true);
       window.addEventListener('resize', this.onReposition);
       this.ro = new ResizeObserver(() => this.onReposition());
@@ -350,9 +402,12 @@ import { detectExtras } from './checks.js';
 
     destroy() {
       clearTimeout(this.timer);
+      clearTimeout(this._hoverTimer);
       this.el.removeEventListener('input', this.onInput);
       this.el.removeEventListener('scroll', this.onScroll);
       this.el.removeEventListener('click', this.onClick);
+      this.el.removeEventListener('mousemove', this.onMove);
+      this.el.removeEventListener('mouseleave', this.onLeave);
       window.removeEventListener('scroll', this.onReposition, true);
       window.removeEventListener('resize', this.onReposition);
       this.ro.disconnect();
@@ -429,6 +484,7 @@ import { detectExtras } from './checks.js';
         span.className = t.kind && t.kind !== 'spell' ? 'mn-spell-bad mn-spell-bad--warn' : 'mn-spell-bad';
         span.textContent = text.slice(t.start, t.end);
         inner.appendChild(span);
+        t.span = span; // for hover hit-testing
         cursor = t.end;
       }
       if (cursor < text.length) {
@@ -447,6 +503,28 @@ import { detectExtras } from './checks.js';
       } else {
         hideTip();
       }
+    }
+
+    // Which flagged word (if any) is under the pointer, via its mirror span.
+    itemAt(x, y) {
+      const PAD = 2;
+      for (const t of this.misspelled) {
+        if (!t.span) continue;
+        const r = t.span.getBoundingClientRect();
+        if (x >= r.left - PAD && x <= r.right + PAD && y >= r.top - PAD && y <= r.bottom + PAD) {
+          return t;
+        }
+      }
+      return null;
+    }
+
+    handleHover(e) {
+      processHover(this, e,
+        (x, y) => this.itemAt(x, y),
+        (item, x, y) => showTip(item, x, y,
+          (s) => this.applyFix(item, s),
+          () => this.scheduleCheck(),
+          true));
     }
 
     applyFix(token, replacement) {
@@ -483,10 +561,18 @@ import { detectExtras } from './checks.js';
 
       this.onInput = () => this.scheduleCheck();
       this.onClick = (e) => this.handleClick(e);
+      this.onMove = (e) => this.handleHover(e);
+      this.onLeave = () => {
+        clearTimeout(this._hoverTimer);
+        this._hoverItem = null;
+        if (tipByHover && tipEl) scheduleTipClose();
+      };
       this.onReposition = () => this.draw();
 
       host.addEventListener('input', this.onInput);
       host.addEventListener('click', this.onClick);
+      host.addEventListener('mousemove', this.onMove);
+      host.addEventListener('mouseleave', this.onLeave);
       window.addEventListener('scroll', this.onReposition, true);
       window.addEventListener('resize', this.onReposition);
       this.ro = new ResizeObserver(() => this.onReposition());
@@ -503,8 +589,11 @@ import { detectExtras } from './checks.js';
 
     destroy() {
       clearTimeout(this.timer);
+      clearTimeout(this._hoverTimer);
       this.host.removeEventListener('input', this.onInput);
       this.host.removeEventListener('click', this.onClick);
+      this.host.removeEventListener('mousemove', this.onMove);
+      this.host.removeEventListener('mouseleave', this.onLeave);
       window.removeEventListener('scroll', this.onReposition, true);
       window.removeEventListener('resize', this.onReposition);
       this.ro.disconnect();
@@ -615,26 +704,38 @@ import { detectExtras } from './checks.js';
       }
     }
 
-    handleClick(e) {
-      // Hit-test the click against each flagged word's rectangles, so clicking
-      // anywhere on the underlined word opens its suggestions (a tiny margin
-      // makes the target easier to hit).
+    // Which flagged word (if any) is under the pointer, via its drawn rects. A
+    // small margin makes the target easier to hit.
+    itemAt(x, y) {
       const PAD = 3;
       for (const m of this.misspelled) {
         for (const r of (m.rects || [])) {
-          if (
-            e.clientX >= r.left - PAD && e.clientX <= r.right + PAD &&
-            e.clientY >= r.top - PAD && e.clientY <= r.bottom + PAD
-          ) {
-            showTip(m, e.clientX, e.clientY,
-              (s) => this.applyFix(m, s),
-              () => this.scheduleCheck());
-            return;
+          if (x >= r.left - PAD && x <= r.right + PAD && y >= r.top - PAD && y <= r.bottom + PAD) {
+            return m;
           }
         }
       }
+      return null;
+    }
 
-      hideTip();
+    handleClick(e) {
+      const m = this.itemAt(e.clientX, e.clientY);
+      if (m) {
+        showTip(m, e.clientX, e.clientY,
+          (s) => this.applyFix(m, s),
+          () => this.scheduleCheck());
+      } else {
+        hideTip();
+      }
+    }
+
+    handleHover(e) {
+      processHover(this, e,
+        (x, y) => this.itemAt(x, y),
+        (item, x, y) => showTip(item, x, y,
+          (s) => this.applyFix(item, s),
+          () => this.scheduleCheck(),
+          true));
     }
 
     applyFix(item, replacement) {

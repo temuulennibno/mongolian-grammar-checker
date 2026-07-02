@@ -190,12 +190,25 @@
       const res = await send({ type: "suggest", word });
       return res.ok ? res.suggestions : [];
     }
+    const HOVER_MS = 500;
+    const HOVER_CLOSE_MS = 400;
     let tipEl = null;
     let tipCloser = null;
     let tipKeyHandler = null;
     let tipActions = [];
     let tipIndex = -1;
+    let tipItem = null;
+    let tipByHover = false;
+    let tipCloseTimer = null;
+    function scheduleTipClose() {
+      clearTimeout(tipCloseTimer);
+      tipCloseTimer = setTimeout(hideTip, HOVER_CLOSE_MS);
+    }
+    function cancelTipClose() {
+      clearTimeout(tipCloseTimer);
+    }
     function hideTip() {
+      clearTimeout(tipCloseTimer);
       if (tipEl) {
         tipEl.remove();
         tipEl = null;
@@ -210,6 +223,8 @@
       }
       tipActions = [];
       tipIndex = -1;
+      tipItem = null;
+      tipByHover = false;
     }
     function setTipActive(i) {
       tipIndex = i;
@@ -223,7 +238,7 @@
       homoglyph: { note: "\u041B\u0430\u0442\u0438\u043D \u04AF\u0441\u044D\u0433 \u0445\u043E\u043B\u0438\u043B\u0434\u0441\u043E\u043D", cls: "mn-kind-warn" },
       repeat: { note: "\u0414\u0430\u0432\u0445\u0430\u0440\u0434\u0441\u0430\u043D \u04AF\u0433", cls: "mn-kind-warn" }
     };
-    async function showTip(item, x, y, onPick, onIgnore) {
+    async function showTip(item, x, y, onPick, onIgnore, hover = false) {
       hideTip();
       const tip = document.createElement("div");
       tip.className = "mn-spell-tip";
@@ -232,10 +247,16 @@
       tip.style.top = Math.min(y + 14, window.innerHeight - 60) + "px";
       document.body.appendChild(tip);
       tipEl = tip;
+      tipItem = item;
+      tipByHover = hover;
       tipCloser = (e) => {
         if (tipEl && !tipEl.contains(e.target)) hideTip();
       };
       setTimeout(() => document.addEventListener("mousedown", tipCloser, true), 0);
+      if (hover) {
+        tip.addEventListener("mouseenter", cancelTipClose);
+        tip.addEventListener("mouseleave", scheduleTipClose);
+      }
       let suggestions;
       if (item.suggestions) {
         suggestions = item.suggestions.map(normSuggestion);
@@ -348,6 +369,20 @@
       }
       return best;
     }
+    function processHover(self, e, itemAt, openTip) {
+      const item = itemAt(e.clientX, e.clientY);
+      if (tipByHover && tipEl) {
+        if (item && item === tipItem) cancelTipClose();
+        else if (!item) scheduleTipClose();
+      }
+      if (item === self._hoverItem) return;
+      self._hoverItem = item;
+      clearTimeout(self._hoverTimer);
+      if (!item) return;
+      if (tipEl && tipItem === item) return;
+      const { clientX, clientY } = e;
+      self._hoverTimer = setTimeout(() => openTip(item, clientX, clientY), HOVER_MS);
+    }
     function mergeFlags(spell, extra) {
       const kept = spell.filter(
         (s) => !extra.some((e) => s.start < e.end && e.start < s.end)
@@ -406,10 +441,18 @@
         this.onInput = () => this.scheduleCheck();
         this.onScroll = () => this.syncScroll();
         this.onClick = (e) => this.handleClick(e);
+        this.onMove = (e) => this.handleHover(e);
+        this.onLeave = () => {
+          clearTimeout(this._hoverTimer);
+          this._hoverItem = null;
+          if (tipByHover && tipEl) scheduleTipClose();
+        };
         this.onReposition = () => this.reposition();
         el.addEventListener("input", this.onInput);
         el.addEventListener("scroll", this.onScroll);
         el.addEventListener("click", this.onClick);
+        el.addEventListener("mousemove", this.onMove);
+        el.addEventListener("mouseleave", this.onLeave);
         window.addEventListener("scroll", this.onReposition, true);
         window.addEventListener("resize", this.onReposition);
         this.ro = new ResizeObserver(() => this.onReposition());
@@ -419,9 +462,12 @@
       }
       destroy() {
         clearTimeout(this.timer);
+        clearTimeout(this._hoverTimer);
         this.el.removeEventListener("input", this.onInput);
         this.el.removeEventListener("scroll", this.onScroll);
         this.el.removeEventListener("click", this.onClick);
+        this.el.removeEventListener("mousemove", this.onMove);
+        this.el.removeEventListener("mouseleave", this.onLeave);
         window.removeEventListener("scroll", this.onReposition, true);
         window.removeEventListener("resize", this.onReposition);
         this.ro.disconnect();
@@ -488,6 +534,7 @@
           span.className = t.kind && t.kind !== "spell" ? "mn-spell-bad mn-spell-bad--warn" : "mn-spell-bad";
           span.textContent = text.slice(t.start, t.end);
           inner.appendChild(span);
+          t.span = span;
           cursor = t.end;
         }
         if (cursor < text.length) {
@@ -509,6 +556,33 @@
         } else {
           hideTip();
         }
+      }
+      // Which flagged word (if any) is under the pointer, via its mirror span.
+      itemAt(x, y) {
+        const PAD = 2;
+        for (const t of this.misspelled) {
+          if (!t.span) continue;
+          const r = t.span.getBoundingClientRect();
+          if (x >= r.left - PAD && x <= r.right + PAD && y >= r.top - PAD && y <= r.bottom + PAD) {
+            return t;
+          }
+        }
+        return null;
+      }
+      handleHover(e) {
+        processHover(
+          this,
+          e,
+          (x, y) => this.itemAt(x, y),
+          (item, x, y) => showTip(
+            item,
+            x,
+            y,
+            (s) => this.applyFix(item, s),
+            () => this.scheduleCheck(),
+            true
+          )
+        );
       }
       applyFix(token, replacement) {
         const el = this.el;
@@ -538,9 +612,17 @@
         document.body.appendChild(this.layer);
         this.onInput = () => this.scheduleCheck();
         this.onClick = (e) => this.handleClick(e);
+        this.onMove = (e) => this.handleHover(e);
+        this.onLeave = () => {
+          clearTimeout(this._hoverTimer);
+          this._hoverItem = null;
+          if (tipByHover && tipEl) scheduleTipClose();
+        };
         this.onReposition = () => this.draw();
         host.addEventListener("input", this.onInput);
         host.addEventListener("click", this.onClick);
+        host.addEventListener("mousemove", this.onMove);
+        host.addEventListener("mouseleave", this.onLeave);
         window.addEventListener("scroll", this.onReposition, true);
         window.addEventListener("resize", this.onReposition);
         this.ro = new ResizeObserver(() => this.onReposition());
@@ -552,8 +634,11 @@
       }
       destroy() {
         clearTimeout(this.timer);
+        clearTimeout(this._hoverTimer);
         this.host.removeEventListener("input", this.onInput);
         this.host.removeEventListener("click", this.onClick);
+        this.host.removeEventListener("mousemove", this.onMove);
+        this.host.removeEventListener("mouseleave", this.onLeave);
         window.removeEventListener("scroll", this.onReposition, true);
         window.removeEventListener("resize", this.onReposition);
         this.ro.disconnect();
@@ -649,23 +734,47 @@
           }
         }
       }
-      handleClick(e) {
+      // Which flagged word (if any) is under the pointer, via its drawn rects. A
+      // small margin makes the target easier to hit.
+      itemAt(x, y) {
         const PAD = 3;
         for (const m of this.misspelled) {
           for (const r of m.rects || []) {
-            if (e.clientX >= r.left - PAD && e.clientX <= r.right + PAD && e.clientY >= r.top - PAD && e.clientY <= r.bottom + PAD) {
-              showTip(
-                m,
-                e.clientX,
-                e.clientY,
-                (s) => this.applyFix(m, s),
-                () => this.scheduleCheck()
-              );
-              return;
+            if (x >= r.left - PAD && x <= r.right + PAD && y >= r.top - PAD && y <= r.bottom + PAD) {
+              return m;
             }
           }
         }
-        hideTip();
+        return null;
+      }
+      handleClick(e) {
+        const m = this.itemAt(e.clientX, e.clientY);
+        if (m) {
+          showTip(
+            m,
+            e.clientX,
+            e.clientY,
+            (s) => this.applyFix(m, s),
+            () => this.scheduleCheck()
+          );
+        } else {
+          hideTip();
+        }
+      }
+      handleHover(e) {
+        processHover(
+          this,
+          e,
+          (x, y) => this.itemAt(x, y),
+          (item, x, y) => showTip(
+            item,
+            x,
+            y,
+            (s) => this.applyFix(item, s),
+            () => this.scheduleCheck(),
+            true
+          )
+        );
       }
       applyFix(item, replacement) {
         const range = this.resolveRange(item);
