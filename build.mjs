@@ -29,4 +29,10 @@ await build({
   outfile: 'dist/content.js',
 });
 
-console.log('Build complete → dist/sw.js, dist/content.js');
+await build({
+  ...common,
+  entryPoints: ['popup/popup.js'],
+  outfile: 'dist/popup.js',
+});
+
+console.log('Build complete → dist/sw.js, dist/content.js, dist/popup.js');

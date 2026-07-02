@@ -1,8 +1,21 @@
 // Popup quick-checker. Talks to the service-worker engine via one-shot
-// messages and mirrors the textarea to draw wavy underlines under misspellings.
+// messages and mirrors the textarea to draw underlines under misspellings.
 
-const MN_WORD = /[А-Яа-яЁёӨөҮү]+/g;
+import { tokenize } from '../src/tokenize.js';
+import { detectExtras } from '../src/checks.js';
+
 const DEBOUNCE_MS = 300;
+
+// Combine spelling flags with extra (homoglyph/repeat) flags; drop spelling
+// flags that overlap an extra one, then order by position.
+function mergeFlags(spell, extra) {
+  const kept = spell.filter((s) => !extra.some((e) => s.start < e.end && e.start < s.end));
+  return [...kept, ...extra].sort((a, b) => a.start - b.start);
+}
+
+function normSuggestion(s) {
+  return typeof s === 'string' ? { label: s, value: s } : s;
+}
 
 const input = document.getElementById('input');
 const mirror = document.getElementById('mirror');
@@ -184,25 +197,19 @@ function syncScroll() {
 
 async function runCheck() {
   const text = input.value;
-  const tokens = [];
-  const seen = new Set();
-  let m;
-  MN_WORD.lastIndex = 0;
-  while ((m = MN_WORD.exec(text)) !== null) {
-    tokens.push({ start: m.index, end: m.index + m[0].length, word: m[0] });
-    seen.add(m[0]);
+  const { tokens, seen } = tokenize(text);
+
+
+  let spell = [];
+  if (seen.size) {
+    const res = await send({ type: 'check', words: [...seen] });
+    const wrong = new Set(res.ok ? res.wrong : []);
+    spell = tokens
+      .filter((t) => wrong.has(t.word) && !ignoreSet.has(t.word))
+      .map((t) => ({ start: t.start, end: t.end, word: t.word, kind: 'spell' }));
   }
 
-  if (seen.size === 0) {
-    misspelled = [];
-    render(text);
-    summaryEl.textContent = ' ';
-    return;
-  }
-
-  const res = await send({ type: 'check', words: [...seen] });
-  const wrong = new Set(res.ok ? res.wrong : []);
-  misspelled = tokens.filter((t) => wrong.has(t.word) && !ignoreSet.has(t.word));
+  misspelled = mergeFlags(spell, detectExtras(text));
   render(text);
 
   const n = misspelled.length;
@@ -244,13 +251,18 @@ async function showTip(token, x, y) {
   tip.style.left = Math.min(x, window.innerWidth - 200) + 'px';
   tip.style.top = Math.min(y + 12, window.innerHeight - 200) + 'px';
 
-  const res = await send({ type: 'suggest', word: token.word });
-  const suggestions = res.ok ? res.suggestions : [];
+  let suggestions;
+  if (token.suggestions) {
+    suggestions = token.suggestions.map(normSuggestion);
+  } else {
+    const res = await send({ type: 'suggest', word: token.word });
+    suggestions = (res.ok ? res.suggestions : []).map(normSuggestion);
+  }
   tip.textContent = '';
 
   const head = document.createElement('div');
   head.className = 'tip-head';
-  head.textContent = token.word;
+  head.textContent = token.display || token.word;
   tip.appendChild(head);
 
   if (!suggestions.length) {
@@ -264,11 +276,12 @@ async function showTip(token, x, y) {
     const item = document.createElement('button');
     item.type = 'button';
     item.className = 'tip-item';
-    item.textContent = s;
-    item.addEventListener('click', () => applyFix(token, s));
+    item.textContent = s.label;
+    item.addEventListener('click', () => applyFix(token, s.value));
     tip.appendChild(item);
   }
 
+  if (!token.kind || token.kind === 'spell') {
   const add = document.createElement('button');
   add.type = 'button';
   add.className = 'tip-add';
@@ -278,6 +291,7 @@ async function showTip(token, x, y) {
     addIgnoreWord(token.word);
   });
   tip.appendChild(add);
+  }
 }
 
 function hideTip() {

@@ -11,6 +11,7 @@
 // suggestion.
 
 import { tokenize } from './tokenize.js';
+import { detectExtras } from './checks.js';
 
 (() => {
   const DEBOUNCE_MS = 300;
@@ -108,7 +109,15 @@ import { tokenize } from './tokenize.js';
     }
   }
 
-  async function showTip(word, x, y, onPick, onIgnore) {
+  // Normalize a suggestion (plain string or {label, value}) to {label, value}.
+  function normSuggestion(s) {
+    return typeof s === 'string' ? { label: s, value: s } : s;
+  }
+
+  // Show suggestions for a flagged item. `item` has { word, display?, kind,
+  // suggestions? }. Spelling flags fetch suggestions from the engine lazily;
+  // homoglyph/repeat flags carry their own preset suggestions.
+  async function showTip(item, x, y, onPick, onIgnore) {
     hideTip();
     const tip = document.createElement('div');
     tip.className = 'mn-spell-tip';
@@ -123,13 +132,18 @@ import { tokenize } from './tokenize.js';
     };
     setTimeout(() => document.addEventListener('mousedown', tipCloser, true), 0);
 
-    const suggestions = await getSuggestions(word);
-    if (tipEl !== tip) return; // superseded
+    let suggestions;
+    if (item.suggestions) {
+      suggestions = item.suggestions.map(normSuggestion);
+    } else {
+      suggestions = (await getSuggestions(item.word)).map(normSuggestion);
+      if (tipEl !== tip) return; // superseded while awaiting
+    }
     tip.textContent = '';
 
     const head = document.createElement('div');
     head.className = 'mn-spell-tip-head';
-    head.textContent = word;
+    head.textContent = item.display || item.word;
     tip.appendChild(head);
 
     if (!suggestions.length) {
@@ -139,30 +153,32 @@ import { tokenize } from './tokenize.js';
       tip.appendChild(none);
     }
     for (const s of suggestions) {
-      const item = document.createElement('button');
-      item.type = 'button';
-      item.className = 'mn-spell-tip-item';
-      item.textContent = s;
-      item.addEventListener('mousedown', (ev) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'mn-spell-tip-item';
+      btn.textContent = s.label;
+      btn.addEventListener('mousedown', (ev) => {
         ev.preventDefault();
         hideTip();
-        onPick(s);
+        onPick(s.value);
       });
-      tip.appendChild(item);
+      tip.appendChild(btn);
     }
 
-    // "Add to my dictionary" — treat this word as correct everywhere from now on.
-    const add = document.createElement('button');
-    add.type = 'button';
-    add.className = 'mn-spell-tip-add';
-    add.textContent = '＋ Толинд нэмэх';
-    add.addEventListener('mousedown', (ev) => {
-      ev.preventDefault();
-      hideTip();
-      addIgnoreWord(word);
-      if (onIgnore) onIgnore();
-    });
-    tip.appendChild(add);
+    // "Add to my dictionary" only makes sense for genuine spelling flags.
+    if (!item.kind || item.kind === 'spell') {
+      const add = document.createElement('button');
+      add.type = 'button';
+      add.className = 'mn-spell-tip-add';
+      add.textContent = '＋ Толинд нэмэх';
+      add.addEventListener('mousedown', (ev) => {
+        ev.preventDefault();
+        hideTip();
+        addIgnoreWord(item.word);
+        if (onIgnore) onIgnore();
+      });
+      tip.appendChild(add);
+    }
   }
 
   // ---- field classification ------------------------------------------------
@@ -189,6 +205,16 @@ import { tokenize } from './tokenize.js';
     }
     if (el.isContentEditable) return 'editable';
     return null;
+  }
+
+  // Combine spelling flags with the extra (homoglyph/repeat) flags, dropping any
+  // spelling flag that overlaps an extra one (the extra flag covers the whole
+  // word and carries a better suggestion), then order by position.
+  function mergeFlags(spell, extra) {
+    const kept = spell.filter(
+      (s) => !extra.some((e) => s.start < e.end && e.start < s.end)
+    );
+    return [...kept, ...extra].sort((a, b) => a.start - b.start);
   }
 
   // For contenteditable, attach to the editing host (topmost editable ancestor).
@@ -307,13 +333,14 @@ import { tokenize } from './tokenize.js';
     async runCheck() {
       const text = this.el.value;
       const { tokens, seen } = tokenize(text);
-      if (seen.size === 0) {
-        this.misspelled = [];
-        this.render('');
-        return;
+      let spell = [];
+      if (seen.size) {
+        const wrong = new Set(await checkWords([...seen]));
+        spell = tokens
+          .filter((t) => wrong.has(t.word) && !ignoreSet.has(t.word))
+          .map((t) => ({ start: t.start, end: t.end, word: t.word, kind: 'spell' }));
       }
-      const wrong = new Set(await checkWords([...seen]));
-      this.misspelled = tokens.filter((t) => wrong.has(t.word) && !ignoreSet.has(t.word));
+      this.misspelled = mergeFlags(spell, detectExtras(text));
       this.render(text);
     }
 
@@ -343,7 +370,7 @@ import { tokenize } from './tokenize.js';
       const pos = this.el.selectionStart;
       const hit = this.misspelled.find((t) => pos >= t.start && pos <= t.end);
       if (hit) {
-        showTip(hit.word, e.clientX, e.clientY,
+        showTip(hit, e.clientX, e.clientY,
           (s) => this.applyFix(hit, s),
           () => this.scheduleCheck());
       } else {
@@ -371,7 +398,7 @@ import { tokenize } from './tokenize.js';
   class EditableController {
     constructor(host) {
       this.host = host;
-      this.misspelled = []; // [{word, range}]
+      this.misspelled = []; // [{word, range, kind, ...}]
       this.timer = null;
 
       this.layer = document.createElement('div');
@@ -464,18 +491,23 @@ import { tokenize } from './tokenize.js';
       if (!this.host.isConnected) return this.destroy();
       const { text, segments } = this.buildTextMap();
       const { tokens, seen } = tokenize(text);
-      if (seen.size === 0) {
-        this.misspelled = [];
-        this.draw();
-        return;
+
+      const extras = detectExtras(text)
+        .map((h) => ({ ...h, range: this.rangeFor(segments, h.start, h.end) }))
+        .filter((h) => h.range);
+
+      const spell = [];
+      if (seen.size) {
+        const wrong = new Set(await checkWords([...seen]));
+        for (const t of tokens) {
+          if (!wrong.has(t.word) || ignoreSet.has(t.word)) continue;
+          if (extras.some((e) => t.start < e.end && e.start < t.end)) continue;
+          const range = this.rangeFor(segments, t.start, t.end);
+          if (range) spell.push({ start: t.start, end: t.end, word: t.word, kind: 'spell', range });
+        }
       }
-      const wrong = new Set(await checkWords([...seen]));
-      this.misspelled = [];
-      for (const t of tokens) {
-        if (!wrong.has(t.word) || ignoreSet.has(t.word)) continue;
-        const range = this.rangeFor(segments, t.start, t.end);
-        if (range) this.misspelled.push({ word: t.word, range });
-      }
+
+      this.misspelled = [...spell, ...extras].sort((a, b) => a.start - b.start);
       this.draw();
     }
 
@@ -506,11 +538,9 @@ import { tokenize } from './tokenize.js';
     }
 
     handleClick(e) {
-      const { text, segments } = this.buildTextMap();
-
-      // Primary: hit-test the click against each flagged word's rectangles, so
-      // clicking anywhere on the underlined word opens its suggestions (a tiny
-      // margin makes the target easier to hit).
+      // Hit-test the click against each flagged word's rectangles, so clicking
+      // anywhere on the underlined word opens its suggestions (a tiny margin
+      // makes the target easier to hit).
       const PAD = 3;
       for (const m of this.misspelled) {
         for (const r of (m.rects || [])) {
@@ -518,13 +548,10 @@ import { tokenize } from './tokenize.js';
             e.clientX >= r.left - PAD && e.clientX <= r.right + PAD &&
             e.clientY >= r.top - PAD && e.clientY <= r.bottom + PAD
           ) {
-            const token = this.tokenForWord(text, segments, m);
-            if (token) {
-              showTip(m.word, e.clientX, e.clientY,
-                (s) => this.applyFix(segments, token, s),
-                () => this.scheduleCheck());
-              return;
-            }
+            showTip(m, e.clientX, e.clientY,
+              (s) => this.applyFix(m, s),
+              () => this.scheduleCheck());
+            return;
           }
         }
       }
@@ -532,26 +559,15 @@ import { tokenize } from './tokenize.js';
       hideTip();
     }
 
-    // Find the flat-text token matching a misspelled item, preferring the one
-    // whose range starts at the same place (handles repeated words correctly).
-    tokenForWord(text, segments, item) {
-      const { tokens } = tokenize(text);
-      const candidates = tokens.filter((t) => t.word === item.word);
-      if (!candidates.length) return null;
-      for (const t of candidates) {
-        const range = this.rangeFor(segments, t.start, t.end);
-        if (range && range.compareBoundaryPoints(Range.START_TO_START, item.range) === 0) {
-          return t;
-        }
-      }
-      return candidates[0];
-    }
-
-    applyFix(segments, token, replacement) {
-      const range = this.rangeFor(segments, token.start, token.end);
-      if (!range || range.toString() !== token.word) return this.scheduleCheck();
+    applyFix(item, replacement) {
+      const range = item.range;
+      let ok = false;
+      try {
+        ok = range && range.toString() === item.word;
+      } catch { ok = false; }
+      if (!ok) return this.scheduleCheck();
       range.deleteContents();
-      range.insertNode(document.createTextNode(replacement));
+      if (replacement) range.insertNode(document.createTextNode(replacement));
       this.host.normalize();
       // Notify frameworks (many rich editors listen for input).
       this.host.dispatchEvent(new InputEvent('input', { bubbles: true }));

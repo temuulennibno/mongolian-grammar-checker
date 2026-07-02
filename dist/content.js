@@ -24,6 +24,99 @@
     return { tokens, seen };
   }
 
+  // src/checks.js
+  var HOMOGLYPH = {
+    a: "\u0430",
+    c: "\u0441",
+    e: "\u0435",
+    o: "\u043E",
+    p: "\u0440",
+    x: "\u0445",
+    y: "\u0443",
+    A: "\u0410",
+    B: "\u0412",
+    C: "\u0421",
+    E: "\u0415",
+    H: "\u041D",
+    K: "\u041A",
+    M: "\u041C",
+    O: "\u041E",
+    P: "\u0420",
+    T: "\u0422",
+    X: "\u0425",
+    Y: "\u0423"
+  };
+  var CYRILLIC = /[А-Яа-яЁёӨөҮү]/;
+  var LETTER_RUN = /[A-Za-zА-Яа-яЁёӨөҮү]+/g;
+  function toCyrillic(word) {
+    let out = "";
+    for (const ch of word) out += HOMOGLYPH[ch] || ch;
+    return out;
+  }
+  function detectHomoglyphs(text) {
+    const out = [];
+    LETTER_RUN.lastIndex = 0;
+    let m;
+    while ((m = LETTER_RUN.exec(text)) !== null) {
+      const word = m[0];
+      if (word.length < 2) continue;
+      let hasCyrillic = false;
+      let hasLatin = false;
+      let allLatinAreHomoglyph = true;
+      for (const ch of word) {
+        if (CYRILLIC.test(ch)) {
+          hasCyrillic = true;
+        } else {
+          hasLatin = true;
+          if (!(ch in HOMOGLYPH)) {
+            allLatinAreHomoglyph = false;
+            break;
+          }
+        }
+      }
+      if (hasCyrillic && hasLatin && allLatinAreHomoglyph) {
+        out.push({
+          start: m.index,
+          end: m.index + word.length,
+          word,
+          kind: "homoglyph",
+          suggestions: [toCyrillic(word)]
+        });
+      }
+    }
+    return out;
+  }
+  function detectRepeats(text) {
+    const words = [];
+    MN_WORD.lastIndex = 0;
+    let m;
+    while ((m = MN_WORD.exec(text)) !== null) {
+      words.push({ start: m.index, end: m.index + m[0].length, word: m[0] });
+    }
+    const out = [];
+    for (let i = 1; i < words.length; i++) {
+      const prev = words[i - 1];
+      const cur = words[i];
+      if (cur.word.length < 2) continue;
+      if (prev.word.toLowerCase() !== cur.word.toLowerCase()) continue;
+      const between = text.slice(prev.end, cur.start);
+      if (!/^\s+$/.test(between)) continue;
+      out.push({
+        start: prev.end,
+        end: cur.end,
+        word: text.slice(prev.end, cur.end),
+        // whitespace + duplicate
+        display: cur.word,
+        kind: "repeat",
+        suggestions: [{ label: `\u0414\u0430\u0432\u0445\u0430\u0440\u0434\u0441\u0430\u043D \xAB${cur.word}\xBB-\u0433 \u0443\u0441\u0442\u0433\u0430\u0445`, value: "" }]
+      });
+    }
+    return out;
+  }
+  function detectExtras(text) {
+    return [...detectHomoglyphs(text), ...detectRepeats(text)].sort((a, b) => a.start - b.start);
+  }
+
   // src/content.js
   (() => {
     const DEBOUNCE_MS = 300;
@@ -109,7 +202,10 @@
         tipCloser = null;
       }
     }
-    async function showTip(word, x, y, onPick, onIgnore) {
+    function normSuggestion(s) {
+      return typeof s === "string" ? { label: s, value: s } : s;
+    }
+    async function showTip(item, x, y, onPick, onIgnore) {
       hideTip();
       const tip = document.createElement("div");
       tip.className = "mn-spell-tip";
@@ -122,12 +218,17 @@
         if (tipEl && !tipEl.contains(e.target)) hideTip();
       };
       setTimeout(() => document.addEventListener("mousedown", tipCloser, true), 0);
-      const suggestions = await getSuggestions(word);
-      if (tipEl !== tip) return;
+      let suggestions;
+      if (item.suggestions) {
+        suggestions = item.suggestions.map(normSuggestion);
+      } else {
+        suggestions = (await getSuggestions(item.word)).map(normSuggestion);
+        if (tipEl !== tip) return;
+      }
       tip.textContent = "";
       const head = document.createElement("div");
       head.className = "mn-spell-tip-head";
-      head.textContent = word;
+      head.textContent = item.display || item.word;
       tip.appendChild(head);
       if (!suggestions.length) {
         const none = document.createElement("div");
@@ -136,28 +237,30 @@
         tip.appendChild(none);
       }
       for (const s of suggestions) {
-        const item = document.createElement("button");
-        item.type = "button";
-        item.className = "mn-spell-tip-item";
-        item.textContent = s;
-        item.addEventListener("mousedown", (ev) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "mn-spell-tip-item";
+        btn.textContent = s.label;
+        btn.addEventListener("mousedown", (ev) => {
           ev.preventDefault();
           hideTip();
-          onPick(s);
+          onPick(s.value);
         });
-        tip.appendChild(item);
+        tip.appendChild(btn);
       }
-      const add = document.createElement("button");
-      add.type = "button";
-      add.className = "mn-spell-tip-add";
-      add.textContent = "\uFF0B \u0422\u043E\u043B\u0438\u043D\u0434 \u043D\u044D\u043C\u044D\u0445";
-      add.addEventListener("mousedown", (ev) => {
-        ev.preventDefault();
-        hideTip();
-        addIgnoreWord(word);
-        if (onIgnore) onIgnore();
-      });
-      tip.appendChild(add);
+      if (!item.kind || item.kind === "spell") {
+        const add = document.createElement("button");
+        add.type = "button";
+        add.className = "mn-spell-tip-add";
+        add.textContent = "\uFF0B \u0422\u043E\u043B\u0438\u043D\u0434 \u043D\u044D\u043C\u044D\u0445";
+        add.addEventListener("mousedown", (ev) => {
+          ev.preventDefault();
+          hideTip();
+          addIgnoreWord(item.word);
+          if (onIgnore) onIgnore();
+        });
+        tip.appendChild(add);
+      }
     }
     const controllers = /* @__PURE__ */ new WeakMap();
     const liveControllers = /* @__PURE__ */ new Set();
@@ -179,6 +282,12 @@
       }
       if (el.isContentEditable) return "editable";
       return null;
+    }
+    function mergeFlags(spell, extra) {
+      const kept = spell.filter(
+        (s) => !extra.some((e) => s.start < e.end && e.start < s.end)
+      );
+      return [...kept, ...extra].sort((a, b) => a.start - b.start);
     }
     function editingHost(el) {
       let host = el;
@@ -292,13 +401,12 @@
       async runCheck() {
         const text = this.el.value;
         const { tokens, seen } = tokenize(text);
-        if (seen.size === 0) {
-          this.misspelled = [];
-          this.render("");
-          return;
+        let spell = [];
+        if (seen.size) {
+          const wrong = new Set(await checkWords([...seen]));
+          spell = tokens.filter((t) => wrong.has(t.word) && !ignoreSet.has(t.word)).map((t) => ({ start: t.start, end: t.end, word: t.word, kind: "spell" }));
         }
-        const wrong = new Set(await checkWords([...seen]));
-        this.misspelled = tokens.filter((t) => wrong.has(t.word) && !ignoreSet.has(t.word));
+        this.misspelled = mergeFlags(spell, detectExtras(text));
         this.render(text);
       }
       render(text) {
@@ -327,7 +435,7 @@
         const hit = this.misspelled.find((t) => pos >= t.start && pos <= t.end);
         if (hit) {
           showTip(
-            hit.word,
+            hit,
             e.clientX,
             e.clientY,
             (s) => this.applyFix(hit, s),
@@ -432,18 +540,18 @@
         if (!this.host.isConnected) return this.destroy();
         const { text, segments } = this.buildTextMap();
         const { tokens, seen } = tokenize(text);
-        if (seen.size === 0) {
-          this.misspelled = [];
-          this.draw();
-          return;
+        const extras = detectExtras(text).map((h) => ({ ...h, range: this.rangeFor(segments, h.start, h.end) })).filter((h) => h.range);
+        const spell = [];
+        if (seen.size) {
+          const wrong = new Set(await checkWords([...seen]));
+          for (const t of tokens) {
+            if (!wrong.has(t.word) || ignoreSet.has(t.word)) continue;
+            if (extras.some((e) => t.start < e.end && e.start < t.end)) continue;
+            const range = this.rangeFor(segments, t.start, t.end);
+            if (range) spell.push({ start: t.start, end: t.end, word: t.word, kind: "spell", range });
+          }
         }
-        const wrong = new Set(await checkWords([...seen]));
-        this.misspelled = [];
-        for (const t of tokens) {
-          if (!wrong.has(t.word) || ignoreSet.has(t.word)) continue;
-          const range = this.rangeFor(segments, t.start, t.end);
-          if (range) this.misspelled.push({ word: t.word, range });
-        }
+        this.misspelled = [...spell, ...extras].sort((a, b) => a.start - b.start);
         this.draw();
       }
       draw() {
@@ -472,46 +580,34 @@
         }
       }
       handleClick(e) {
-        const { text, segments } = this.buildTextMap();
         const PAD = 3;
         for (const m of this.misspelled) {
           for (const r of m.rects || []) {
             if (e.clientX >= r.left - PAD && e.clientX <= r.right + PAD && e.clientY >= r.top - PAD && e.clientY <= r.bottom + PAD) {
-              const token = this.tokenForWord(text, segments, m);
-              if (token) {
-                showTip(
-                  m.word,
-                  e.clientX,
-                  e.clientY,
-                  (s) => this.applyFix(segments, token, s),
-                  () => this.scheduleCheck()
-                );
-                return;
-              }
+              showTip(
+                m,
+                e.clientX,
+                e.clientY,
+                (s) => this.applyFix(m, s),
+                () => this.scheduleCheck()
+              );
+              return;
             }
           }
         }
         hideTip();
       }
-      // Find the flat-text token matching a misspelled item, preferring the one
-      // whose range starts at the same place (handles repeated words correctly).
-      tokenForWord(text, segments, item) {
-        const { tokens } = tokenize(text);
-        const candidates = tokens.filter((t) => t.word === item.word);
-        if (!candidates.length) return null;
-        for (const t of candidates) {
-          const range = this.rangeFor(segments, t.start, t.end);
-          if (range && range.compareBoundaryPoints(Range.START_TO_START, item.range) === 0) {
-            return t;
-          }
+      applyFix(item, replacement) {
+        const range = item.range;
+        let ok = false;
+        try {
+          ok = range && range.toString() === item.word;
+        } catch {
+          ok = false;
         }
-        return candidates[0];
-      }
-      applyFix(segments, token, replacement) {
-        const range = this.rangeFor(segments, token.start, token.end);
-        if (!range || range.toString() !== token.word) return this.scheduleCheck();
+        if (!ok) return this.scheduleCheck();
         range.deleteContents();
-        range.insertNode(document.createTextNode(replacement));
+        if (replacement) range.insertNode(document.createTextNode(replacement));
         this.host.normalize();
         this.host.dispatchEvent(new InputEvent("input", { bubbles: true }));
         this.host.focus();
