@@ -205,6 +205,11 @@
     function normSuggestion(s) {
       return typeof s === "string" ? { label: s, value: s } : s;
     }
+    const KIND_META = {
+      spell: { note: "\u0410\u043B\u0434\u0430\u0430\u0442\u0430\u0439 \u0431\u0438\u0447\u043B\u044D\u0433", cls: "mn-kind-spell" },
+      homoglyph: { note: "\u041B\u0430\u0442\u0438\u043D \u04AF\u0441\u044D\u0433 \u0445\u043E\u043B\u0438\u043B\u0434\u0441\u043E\u043D", cls: "mn-kind-warn" },
+      repeat: { note: "\u0414\u0430\u0432\u0445\u0430\u0440\u0434\u0441\u0430\u043D \u04AF\u0433", cls: "mn-kind-warn" }
+    };
     async function showTip(item, x, y, onPick, onIgnore) {
       hideTip();
       const tip = document.createElement("div");
@@ -226,10 +231,15 @@
         if (tipEl !== tip) return;
       }
       tip.textContent = "";
+      const meta = KIND_META[item.kind] || KIND_META.spell;
       const head = document.createElement("div");
-      head.className = "mn-spell-tip-head";
+      head.className = "mn-spell-tip-head " + meta.cls;
       head.textContent = item.display || item.word;
       tip.appendChild(head);
+      const note = document.createElement("div");
+      note.className = "mn-spell-tip-note";
+      note.textContent = meta.note;
+      tip.appendChild(note);
       if (!suggestions.length) {
         const none = document.createElement("div");
         none.className = "mn-spell-tip-none";
@@ -420,7 +430,7 @@
             inner.appendChild(document.createTextNode(text.slice(cursor, t.start)));
           }
           const span = document.createElement("span");
-          span.className = "mn-spell-bad";
+          span.className = t.kind && t.kind !== "spell" ? "mn-spell-bad mn-spell-bad--warn" : "mn-spell-bad";
           span.textContent = text.slice(t.start, t.end);
           inner.appendChild(span);
           cursor = t.end;
@@ -570,7 +580,7 @@
             if (r.width === 0 || r.height === 0) continue;
             item.rects.push(r);
             const u = document.createElement("div");
-            u.className = "mn-spell-underline";
+            u.className = item.kind && item.kind !== "spell" ? "mn-spell-underline mn-spell-underline--warn" : "mn-spell-underline";
             u.style.left = r.left + "px";
             u.style.top = r.top + "px";
             u.style.width = r.width + "px";

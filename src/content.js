@@ -114,6 +114,13 @@ import { detectExtras } from './checks.js';
     return typeof s === 'string' ? { label: s, value: s } : s;
   }
 
+  // Short caption + accent class shown in the tooltip per flag kind.
+  const KIND_META = {
+    spell: { note: 'Алдаатай бичлэг', cls: 'mn-kind-spell' },
+    homoglyph: { note: 'Латин үсэг холилдсон', cls: 'mn-kind-warn' },
+    repeat: { note: 'Давхардсан үг', cls: 'mn-kind-warn' },
+  };
+
   // Show suggestions for a flagged item. `item` has { word, display?, kind,
   // suggestions? }. Spelling flags fetch suggestions from the engine lazily;
   // homoglyph/repeat flags carry their own preset suggestions.
@@ -141,10 +148,16 @@ import { detectExtras } from './checks.js';
     }
     tip.textContent = '';
 
+    const meta = KIND_META[item.kind] || KIND_META.spell;
     const head = document.createElement('div');
-    head.className = 'mn-spell-tip-head';
+    head.className = 'mn-spell-tip-head ' + meta.cls;
     head.textContent = item.display || item.word;
     tip.appendChild(head);
+
+    const note = document.createElement('div');
+    note.className = 'mn-spell-tip-note';
+    note.textContent = meta.note;
+    tip.appendChild(note);
 
     if (!suggestions.length) {
       const none = document.createElement('div');
@@ -355,7 +368,7 @@ import { detectExtras } from './checks.js';
           inner.appendChild(document.createTextNode(text.slice(cursor, t.start)));
         }
         const span = document.createElement('span');
-        span.className = 'mn-spell-bad';
+        span.className = t.kind && t.kind !== 'spell' ? 'mn-spell-bad mn-spell-bad--warn' : 'mn-spell-bad';
         span.textContent = text.slice(t.start, t.end);
         inner.appendChild(span);
         cursor = t.end;
@@ -527,7 +540,9 @@ import { detectExtras } from './checks.js';
           if (r.width === 0 || r.height === 0) continue;
           item.rects.push(r);
           const u = document.createElement('div');
-          u.className = 'mn-spell-underline';
+          u.className = item.kind && item.kind !== 'spell'
+            ? 'mn-spell-underline mn-spell-underline--warn'
+            : 'mn-spell-underline';
           u.style.left = r.left + 'px';
           u.style.top = r.top + 'px';
           u.style.width = r.width + 'px';

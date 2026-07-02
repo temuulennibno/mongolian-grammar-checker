@@ -6,41 +6,64 @@
   <title>Монгол зөв бичих · Demo</title>
   <link rel="stylesheet" href="content.css">
   <style>
-    :root { --ink:#1a1a1a; --muted:#6b6b6f; --line:#e3e3e6; --accent:#255cb8; }
+    :root {
+      --ink: #1f2328; --muted: #6b7280; --line: #e5e7eb; --line-soft: #f0f1f3;
+      --accent: #2f6fed; --bad: #e53935; --warn: #e08600;
+    }
     * { box-sizing: border-box; }
     body {
-      margin: 0; color: var(--ink); background: #f6f6f7;
+      margin: 0; color: var(--ink); background: #f6f7f9;
       font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
       line-height: 1.5;
     }
     .wrap { max-width: 720px; margin: 0 auto; padding: 32px 20px 80px; }
-    header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-    h1 { font-size: 22px; margin: 0; }
+
+    header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand img { width: 40px; height: 40px; border-radius: 9px; }
+    h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+    .brand .sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
     .status {
-      font-size: 13px; padding: 4px 10px; border-radius: 999px;
-      background: #ecebef; color: var(--muted); white-space: nowrap;
+      display: inline-flex; align-items: center; gap: 7px;
+      font-size: 13px; padding: 5px 12px; border-radius: 999px;
+      background: var(--line-soft); color: var(--muted); white-space: nowrap;
     }
+    .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #c7a24a; }
     .status.loading { background: #fff4e0; color: #8a5a00; }
-    .status.ready { background: #e4f3e7; color: #2e7d32; }
-    .lede { color: var(--muted); font-size: 14px; margin: 8px 0 24px; }
+    .status.ready { background: #e7f5ec; color: #1a7f37; }
+    .status.ready::before { background: #1a7f37; }
+
+    .lede { color: var(--muted); font-size: 15px; margin: 18px 0 16px; }
+
+    .legend { display: flex; flex-wrap: wrap; gap: 16px; margin: 0 0 24px; font-size: 13px; color: #444; }
+    .legend span { display: inline-flex; align-items: center; gap: 7px; }
+    .swatch { width: 22px; height: 0; border-bottom: 2px solid var(--bad); }
+    .swatch.warn { border-bottom-color: var(--warn); }
+
     .card {
-      background: #fff; border: 1px solid var(--line); border-radius: 10px;
-      padding: 16px; margin: 16px 0;
+      background: #fff; border: 1px solid var(--line); border-radius: 12px;
+      padding: 16px; margin: 14px 0; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
     }
-    .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 10px; }
-    textarea, input.field {
-      width: 100%; border: 1px solid var(--line); border-radius: 8px;
+    .card h2 {
+      font-size: 12px; text-transform: uppercase; letter-spacing: .05em;
+      color: var(--muted); margin: 0 0 10px; font-weight: 600;
+    }
+    textarea, input.field, .editable {
+      width: 100%; border: 1px solid var(--line); border-radius: 9px;
       padding: 12px; font-size: 17px; font-family: Georgia, "Times New Roman", serif;
-      color: var(--ink); background: #fff;
+      color: var(--ink); background: #fff; line-height: 1.6;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
-    textarea { height: 110px; resize: vertical; line-height: 1.55; }
-    .editable {
-      border: 1px solid var(--line); border-radius: 8px; padding: 12px;
-      font-size: 17px; font-family: Georgia, "Times New Roman", serif;
-      min-height: 64px; line-height: 1.6; background: #fff;
+    textarea:focus, input.field:focus, .editable:focus {
+      outline: none; border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(47, 111, 237, 0.15);
     }
-    .hint { font-size: 13px; color: var(--muted); margin-top: 8px; }
-    .steps { font-size: 14px; color: var(--muted); padding-left: 18px; }
+    textarea { height: 120px; resize: vertical; }
+    .editable { min-height: 64px; }
+
+    .hint { font-size: 13px; color: var(--muted); margin: 10px 0 0; }
+    .steps { font-size: 14px; color: var(--muted); padding-left: 18px; margin: 0 0 8px; }
     .steps li { margin: 4px 0; }
     footer { margin-top: 28px; font-size: 12px; color: var(--muted); }
     a { color: var(--accent); }
@@ -49,23 +72,29 @@
 <body>
   <div class="wrap">
     <header>
-      <h1>Монгол зөв бичих</h1>
+      <div class="brand">
+        <img src="icon.png" alt="">
+        <div>
+          <h1>Монгол зөв бичих</h1>
+          <div class="sub">Chrome өргөтгөлийн демо · суулгах шаардлагагүй</div>
+        </div>
+      </div>
       <span class="status loading" id="status">Толь ачаалж байна…</span>
     </header>
+
     <p class="lede">
-      Энэ нь өргөтгөл (extension) суулгахгүйгээр ажилладаг демо. Доорх талбаруудад
-      монгол бичвэр бичихэд алдаатай үгс улаанаар тодруулагдана.
-      Алдаатай үг дээр дарж зөв хувилбарыг сонгоно уу.
+      Доорх аль ч талбарт монголоор бичихэд алдаатай үгс тодруулагдана. Тодруулсан
+      үг дээр дарж зөв хувилбарыг нь сонгоно уу.
     </p>
-    <ol class="steps">
-      <li>Доорх аль нэг талбар дээр дарж монголоор бичнэ үү (жишээ бичвэр бэлэн байгаа).</li>
-      <li>Алдаатай үг улаанаар тодруулагдана.</li>
-      <li>Тэр үг дээр дарж саналуудаас зөвийг нь сонгоно.</li>
-    </ol>
+
+    <div class="legend">
+      <span><i class="swatch"></i> Зөв бичгийн алдаа</span>
+      <span><i class="swatch warn"></i> Латин үсэг холилдсон / давхардсан үг</span>
+    </div>
 
     <div class="card">
       <h2>1 · Энгийн текст талбар (textarea)</h2>
-      <textarea id="ta" spellcheck="false">Сайн байна уу. Энэ бол монггол хэлний зөв бичгийн шалгагчийн жишээ өгүүлбэр юм.</textarea>
+      <textarea id="ta" spellcheck="false">Сайн байна уу. Энэ бол монггол хэлний шалгагч. Мoнгол үг үг давхардсан.</textarea>
     </div>
 
     <div class="card">

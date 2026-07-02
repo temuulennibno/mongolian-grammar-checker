@@ -14,8 +14,14 @@
   -webkit-text-fill-color: transparent;
 }
 
+/* Spelling errors: red underline. Homoglyph / repeat: amber (a different kind
+   of issue, not a plain typo). */
 .mn-spell-bad {
   border-bottom: 2px solid #e53935;
+}
+
+.mn-spell-bad--warn {
+  border-bottom-color: #e08600;
 }
 
 /* contenteditable: full-viewport overlay holding per-word underline rects */
@@ -34,32 +40,44 @@
   border-bottom: 2px solid #e53935;
 }
 
+.mn-spell-underline--warn {
+  border-bottom-color: #e08600;
+}
+
 .mn-spell-tip {
   position: fixed;
   z-index: 2147483647;
-  min-width: 160px;
-  max-width: 240px;
-  max-height: 280px;
+  min-width: 184px;
+  max-width: 264px;
+  max-height: 300px;
   overflow-y: auto;
   background: #ffffff;
-  border: 1px solid #d0d0d0;
-  border-radius: 8px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.16);
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.16);
   padding: 6px;
   font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
   font-size: 14px;
-  color: #1a1a1a;
+  color: #1f2328;
 }
 
 .mn-spell-tip-head {
   font-weight: 600;
-  color: #c0392b;
-  padding: 4px 8px 6px;
-  border-bottom: 1px solid #eee;
-  margin-bottom: 4px;
+  padding: 6px 8px 2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.mn-spell-tip-head.mn-kind-spell { color: #c0392b; }
+.mn-spell-tip-head.mn-kind-warn { color: #b26a00; }
+
+.mn-spell-tip-note {
+  font-size: 11px;
+  color: #6b7280;
+  padding: 0 8px 6px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #f0f1f3;
 }
 
 .mn-spell-tip-item {
@@ -68,38 +86,41 @@
   text-align: left;
   border: none;
   background: transparent;
-  padding: 6px 8px;
-  border-radius: 5px;
+  padding: 7px 8px;
+  border-radius: 6px;
   cursor: pointer;
   font: inherit;
   color: inherit;
 }
 
 .mn-spell-tip-item:hover {
-  background: #f0f4ff;
+  background: #eef3ff;
+  color: #1d4ed8;
 }
 
 .mn-spell-tip-none {
-  padding: 6px 8px;
-  color: #888;
+  padding: 7px 8px;
+  color: #9096a0;
   font-style: italic;
 }
 
 .mn-spell-tip-add {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   width: 100%;
   text-align: left;
   border: none;
-  border-top: 1px solid #eee;
+  border-top: 1px solid #f0f1f3;
   margin-top: 4px;
   background: transparent;
   padding: 8px;
-  border-radius: 5px;
+  border-radius: 6px;
   cursor: pointer;
   font: inherit;
-  color: #2e7d32;
+  color: #1a7f37;
 }
 
 .mn-spell-tip-add:hover {
-  background: #eef7ee;
+  background: #e9f6ee;
 }

@@ -1,6 +1,6 @@
 {
   "name": "mongolian-grammar-checker",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Chrome extension for offline Mongolian (Cyrillic) spell/typo checking.",
   "type": "module",
   "scripts": {

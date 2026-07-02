@@ -17,6 +17,7 @@ demo/demo-setup.bundle.js
 demo/mn_MN.aff
 demo/mn_MN.dic
 demo/supplement.txt
+demo/icon.png
 
 # local machine-specific settings
 .claude/settings.local.json

@@ -17,6 +17,12 @@ function normSuggestion(s) {
   return typeof s === 'string' ? { label: s, value: s } : s;
 }
 
+const KIND_META = {
+  spell: { note: 'Алдаатай бичлэг', cls: 'mn-kind-spell' },
+  homoglyph: { note: 'Латин үсэг холилдсон', cls: 'mn-kind-warn' },
+  repeat: { note: 'Давхардсан үг', cls: 'mn-kind-warn' },
+};
+
 const input = document.getElementById('input');
 const mirror = document.getElementById('mirror');
 const mirrorInner = document.getElementById('mirrorInner');
@@ -116,9 +122,11 @@ function renderIgnorePanel() {
   });
   ignorePanel.appendChild(clearAll);
 
+  const chips = document.createElement('div');
+  chips.className = 'ignore-chips';
   for (const w of [...ignoreSet].sort((a, b) => a.localeCompare(b))) {
-    const row = document.createElement('div');
-    row.className = 'ignore-row';
+    const chip = document.createElement('span');
+    chip.className = 'chip';
     const label = document.createElement('span');
     label.textContent = w;
     const rm = document.createElement('button');
@@ -131,10 +139,11 @@ function renderIgnorePanel() {
       renderIgnorePanel();
       schedule();
     });
-    row.appendChild(label);
-    row.appendChild(rm);
-    ignorePanel.appendChild(row);
+    chip.appendChild(label);
+    chip.appendChild(rm);
+    chips.appendChild(chip);
   }
+  ignorePanel.appendChild(chips);
 }
 
 // Reflect edits made elsewhere (content-script "add to dictionary", other tabs).
@@ -226,7 +235,7 @@ function render(text) {
       mirrorInner.appendChild(document.createTextNode(text.slice(cursor, t.start)));
     }
     const span = document.createElement('span');
-    span.className = 'mn-bad';
+    span.className = t.kind && t.kind !== 'spell' ? 'mn-bad mn-bad--warn' : 'mn-bad';
     span.textContent = text.slice(t.start, t.end);
     mirrorInner.appendChild(span);
     cursor = t.end;
@@ -260,10 +269,16 @@ async function showTip(token, x, y) {
   }
   tip.textContent = '';
 
+  const meta = KIND_META[token.kind] || KIND_META.spell;
   const head = document.createElement('div');
-  head.className = 'tip-head';
+  head.className = 'tip-head ' + meta.cls;
   head.textContent = token.display || token.word;
   tip.appendChild(head);
+
+  const note = document.createElement('div');
+  note.className = 'tip-note';
+  note.textContent = meta.note;
+  tip.appendChild(note);
 
   if (!suggestions.length) {
     const none = document.createElement('div');

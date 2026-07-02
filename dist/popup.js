@@ -126,6 +126,11 @@
   function normSuggestion(s) {
     return typeof s === "string" ? { label: s, value: s } : s;
   }
+  var KIND_META = {
+    spell: { note: "\u0410\u043B\u0434\u0430\u0430\u0442\u0430\u0439 \u0431\u0438\u0447\u043B\u044D\u0433", cls: "mn-kind-spell" },
+    homoglyph: { note: "\u041B\u0430\u0442\u0438\u043D \u04AF\u0441\u044D\u0433 \u0445\u043E\u043B\u0438\u043B\u0434\u0441\u043E\u043D", cls: "mn-kind-warn" },
+    repeat: { note: "\u0414\u0430\u0432\u0445\u0430\u0440\u0434\u0441\u0430\u043D \u04AF\u0433", cls: "mn-kind-warn" }
+  };
   var input = document.getElementById("input");
   var mirror = document.getElementById("mirror");
   var mirrorInner = document.getElementById("mirrorInner");
@@ -211,9 +216,11 @@
       schedule();
     });
     ignorePanel.appendChild(clearAll);
+    const chips = document.createElement("div");
+    chips.className = "ignore-chips";
     for (const w of [...ignoreSet].sort((a, b) => a.localeCompare(b))) {
-      const row = document.createElement("div");
-      row.className = "ignore-row";
+      const chip = document.createElement("span");
+      chip.className = "chip";
       const label = document.createElement("span");
       label.textContent = w;
       const rm = document.createElement("button");
@@ -226,10 +233,11 @@
         renderIgnorePanel();
         schedule();
       });
-      row.appendChild(label);
-      row.appendChild(rm);
-      ignorePanel.appendChild(row);
+      chip.appendChild(label);
+      chip.appendChild(rm);
+      chips.appendChild(chip);
     }
+    ignorePanel.appendChild(chips);
   }
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
@@ -302,7 +310,7 @@
         mirrorInner.appendChild(document.createTextNode(text.slice(cursor, t.start)));
       }
       const span = document.createElement("span");
-      span.className = "mn-bad";
+      span.className = t.kind && t.kind !== "spell" ? "mn-bad mn-bad--warn" : "mn-bad";
       span.textContent = text.slice(t.start, t.end);
       mirrorInner.appendChild(span);
       cursor = t.end;
@@ -332,10 +340,15 @@
       suggestions = (res.ok ? res.suggestions : []).map(normSuggestion);
     }
     tip.textContent = "";
+    const meta = KIND_META[token.kind] || KIND_META.spell;
     const head = document.createElement("div");
-    head.className = "tip-head";
+    head.className = "tip-head " + meta.cls;
     head.textContent = token.display || token.word;
     tip.appendChild(head);
+    const note = document.createElement("div");
+    note.className = "tip-note";
+    note.textContent = meta.note;
+    tip.appendChild(note);
     if (!suggestions.length) {
       const none = document.createElement("div");
       none.className = "tip-none";
