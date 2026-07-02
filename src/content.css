@@ -84,3 +84,22 @@
   color: #888;
   font-style: italic;
 }
+
+.mn-spell-tip-add {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-top: 1px solid #eee;
+  margin-top: 4px;
+  background: transparent;
+  padding: 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  font: inherit;
+  color: #2e7d32;
+}
+
+.mn-spell-tip-add:hover {
+  background: #eef7ee;
+}

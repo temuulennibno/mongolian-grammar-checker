@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "Монгол зөв бичих | Mongolian Spell Checker",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "Монгол кирилл бичвэрийн алдаа шалгагч. Offline Mongolian (Cyrillic) spell/typo checker.",
-  "permissions": ["contextMenus", "storage"],
+  "permissions": ["contextMenus", "storage", "tabs"],
   "background": {
     "service_worker": "dist/sw.js"
   },

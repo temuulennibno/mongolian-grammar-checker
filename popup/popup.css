@@ -28,6 +28,74 @@ html, body {
 .status.ready { color: #2e7d32; }
 .status.error { color: #c0392b; }
 
+.settings {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 12px;
+  background: #fbfbfc;
+  border-bottom: 1px solid #eee;
+  font-size: 12px;
+  color: #444;
+}
+
+.settings .spacer { flex: 1; }
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  user-select: none;
+}
+.toggle input { margin: 0; cursor: pointer; }
+
+.linkbtn {
+  border: none;
+  background: transparent;
+  color: #2b5fd0;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0;
+}
+.linkbtn:hover { text-decoration: underline; }
+
+.ignore-panel {
+  max-height: 150px;
+  overflow-y: auto;
+  padding: 8px 12px;
+  border-bottom: 1px solid #eee;
+  background: #fff;
+  font-size: 13px;
+}
+.ignore-panel .empty { color: #888; font-style: italic; }
+.ignore-panel .clear-all {
+  margin-bottom: 6px;
+  border: 1px solid #d0d0d0;
+  background: #fff;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.ignore-panel .clear-all:hover { background: #f0f0f0; }
+.ignore-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 0;
+}
+.ignore-row button {
+  border: none;
+  background: transparent;
+  color: #c0392b;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 6px;
+}
+.ignore-row button:hover { color: #922b21; }
+
 .editor {
   position: relative;
   margin: 0;
@@ -128,3 +196,19 @@ html, body {
 .tip-item:hover { background: #f0f4ff; }
 
 .tip-none { padding: 6px 8px; color: #888; font-style: italic; }
+
+.tip-add {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-top: 1px solid #eee;
+  margin-top: 4px;
+  background: transparent;
+  padding: 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  font: inherit;
+  color: #2e7d32;
+}
+.tip-add:hover { background: #eef7ee; }

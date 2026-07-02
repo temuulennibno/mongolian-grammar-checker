@@ -54,7 +54,12 @@ window.chrome = {
     onMessage: { addListener() {} },
     onConnect: { addListener() {} },
   },
-  storage: { session: { get: async () => ({}) } },
+  storage: {
+    session: { get: async () => ({}) },
+    // The demo has no persisted settings/dictionary; return empties and no-op.
+    local: { get: async () => ({}), set: async () => {} },
+    onChanged: { addListener() {} },
+  },
   action: { setBadgeText() {} },
   contextMenus: { create() {}, onClicked: { addListener() {} } },
 };

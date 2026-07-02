@@ -11,9 +11,134 @@ const statusEl = document.getElementById('status');
 const summaryEl = document.getElementById('summary');
 const clearBtn = document.getElementById('clear');
 const tip = document.getElementById('tip');
+const tgGlobal = document.getElementById('tgGlobal');
+const tgSite = document.getElementById('tgSite');
+const siteLabel = document.getElementById('siteLabel');
+const ignoreBtn = document.getElementById('ignoreBtn');
+const ignorePanel = document.getElementById('ignorePanel');
 
 let misspelled = [];
 let timer = null;
+
+// ---- settings (shared with the content script via chrome.storage.local) ----
+const ignoreSet = new Set();
+let currentHost = '';
+
+async function loadSettings() {
+  const data = await chrome.storage.local.get(['mnEnabled', 'mnDisabledHosts', 'mnIgnore']);
+  tgGlobal.checked = data.mnEnabled !== false; // default on
+
+  ignoreSet.clear();
+  for (const w of (data.mnIgnore || [])) ignoreSet.add(w);
+  updateIgnoreCount();
+
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.url && /^https?:/.test(tab.url)) currentHost = new URL(tab.url).hostname;
+  } catch { /* no tabs permission / restricted page */ }
+
+  if (currentHost) {
+    siteLabel.textContent = currentHost;
+    tgSite.checked = !(data.mnDisabledHosts || {})[currentHost];
+    tgSite.disabled = false;
+  } else {
+    siteLabel.textContent = 'Энэ сайт';
+    tgSite.checked = false;
+    tgSite.disabled = true;
+  }
+}
+
+function updateIgnoreCount() {
+  ignoreBtn.textContent = `Миний толь (${ignoreSet.size})`;
+}
+
+tgGlobal.addEventListener('change', () => {
+  chrome.storage.local.set({ mnEnabled: tgGlobal.checked });
+});
+
+tgSite.addEventListener('change', async () => {
+  if (!currentHost) return;
+  const { mnDisabledHosts } = await chrome.storage.local.get('mnDisabledHosts');
+  const hosts = mnDisabledHosts || {};
+  if (tgSite.checked) delete hosts[currentHost];
+  else hosts[currentHost] = true;
+  await chrome.storage.local.set({ mnDisabledHosts: hosts });
+});
+
+ignoreBtn.addEventListener('click', () => {
+  ignorePanel.hidden = !ignorePanel.hidden;
+  if (!ignorePanel.hidden) renderIgnorePanel();
+});
+
+async function saveIgnore() {
+  await chrome.storage.local.set({ mnIgnore: [...ignoreSet] });
+  updateIgnoreCount();
+}
+
+async function addIgnoreWord(word) {
+  if (ignoreSet.has(word)) return;
+  ignoreSet.add(word);
+  await saveIgnore();
+  schedule();
+}
+
+function renderIgnorePanel() {
+  ignorePanel.textContent = '';
+  if (ignoreSet.size === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.textContent = 'Хоосон байна';
+    ignorePanel.appendChild(empty);
+    return;
+  }
+  const clearAll = document.createElement('button');
+  clearAll.type = 'button';
+  clearAll.className = 'clear-all';
+  clearAll.textContent = 'Бүгдийг арилгах';
+  clearAll.addEventListener('click', async () => {
+    ignoreSet.clear();
+    await saveIgnore();
+    renderIgnorePanel();
+    schedule();
+  });
+  ignorePanel.appendChild(clearAll);
+
+  for (const w of [...ignoreSet].sort((a, b) => a.localeCompare(b))) {
+    const row = document.createElement('div');
+    row.className = 'ignore-row';
+    const label = document.createElement('span');
+    label.textContent = w;
+    const rm = document.createElement('button');
+    rm.type = 'button';
+    rm.textContent = '✕';
+    rm.title = 'Устгах';
+    rm.addEventListener('click', async () => {
+      ignoreSet.delete(w);
+      await saveIgnore();
+      renderIgnorePanel();
+      schedule();
+    });
+    row.appendChild(label);
+    row.appendChild(rm);
+    ignorePanel.appendChild(row);
+  }
+}
+
+// Reflect edits made elsewhere (content-script "add to dictionary", other tabs).
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local') return;
+  if ('mnIgnore' in changes) {
+    ignoreSet.clear();
+    for (const w of (changes.mnIgnore.newValue || [])) ignoreSet.add(w);
+    updateIgnoreCount();
+    if (!ignorePanel.hidden) renderIgnorePanel();
+    schedule();
+  }
+  if ('mnEnabled' in changes) tgGlobal.checked = changes.mnEnabled.newValue !== false;
+  if ('mnDisabledHosts' in changes && currentHost) {
+    tgSite.checked = !(changes.mnDisabledHosts.newValue || {})[currentHost];
+  }
+});
 
 function send(message) {
   return new Promise((resolve) => {
@@ -77,7 +202,7 @@ async function runCheck() {
 
   const res = await send({ type: 'check', words: [...seen] });
   const wrong = new Set(res.ok ? res.wrong : []);
-  misspelled = tokens.filter((t) => wrong.has(t.word));
+  misspelled = tokens.filter((t) => wrong.has(t.word) && !ignoreSet.has(t.word));
   render(text);
 
   const n = misspelled.length;
@@ -133,7 +258,6 @@ async function showTip(token, x, y) {
     none.className = 'tip-none';
     none.textContent = 'Санал алга';
     tip.appendChild(none);
-    return;
   }
 
   for (const s of suggestions) {
@@ -144,6 +268,16 @@ async function showTip(token, x, y) {
     item.addEventListener('click', () => applyFix(token, s));
     tip.appendChild(item);
   }
+
+  const add = document.createElement('button');
+  add.type = 'button';
+  add.className = 'tip-add';
+  add.textContent = '＋ Толинд нэмэх';
+  add.addEventListener('click', () => {
+    hideTip();
+    addIgnoreWord(token.word);
+  });
+  tip.appendChild(add);
 }
 
 function hideTip() {
@@ -180,5 +314,6 @@ chrome.storage.session.get('lastSelectionCheck').then((data) => {
   chrome.action?.setBadgeText?.({ text: '' });
 });
 
+loadSettings();
 warmup();
 input.focus();

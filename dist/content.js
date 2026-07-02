@@ -3,6 +3,35 @@
   (() => {
     const MN_WORD = /[А-Яа-яЁёӨөҮү]+/g;
     const DEBOUNCE_MS = 300;
+    const HOST = location.hostname;
+    let enabledGlobal = true;
+    let siteDisabled = false;
+    const ignoreSet = /* @__PURE__ */ new Set();
+    function isActive() {
+      return enabledGlobal && !siteDisabled;
+    }
+    async function loadSettings() {
+      let data = {};
+      try {
+        data = await chrome.storage.local.get(["mnEnabled", "mnDisabledHosts", "mnIgnore"]);
+      } catch {
+      }
+      enabledGlobal = data.mnEnabled !== false;
+      siteDisabled = !!(data.mnDisabledHosts || {})[HOST];
+      ignoreSet.clear();
+      for (const w of data.mnIgnore || []) ignoreSet.add(w);
+    }
+    async function addIgnoreWord(word) {
+      try {
+        const data = await chrome.storage.local.get("mnIgnore");
+        const list = data.mnIgnore || [];
+        if (!list.includes(word)) {
+          list.push(word);
+          await chrome.storage.local.set({ mnIgnore: list });
+        }
+      } catch {
+      }
+    }
     let port = null;
     let msgId = 0;
     const pending = /* @__PURE__ */ new Map();
@@ -75,7 +104,7 @@
         tipCloser = null;
       }
     }
-    async function showTip(word, x, y, onPick) {
+    async function showTip(word, x, y, onPick, onIgnore) {
       hideTip();
       const tip = document.createElement("div");
       tip.className = "mn-spell-tip";
@@ -100,7 +129,6 @@
         none.className = "mn-spell-tip-none";
         none.textContent = "\u0421\u0430\u043D\u0430\u043B \u0430\u043B\u0433\u0430";
         tip.appendChild(none);
-        return;
       }
       for (const s of suggestions) {
         const item = document.createElement("button");
@@ -114,8 +142,26 @@
         });
         tip.appendChild(item);
       }
+      const add = document.createElement("button");
+      add.type = "button";
+      add.className = "mn-spell-tip-add";
+      add.textContent = "\uFF0B \u0422\u043E\u043B\u0438\u043D\u0434 \u043D\u044D\u043C\u044D\u0445";
+      add.addEventListener("mousedown", (ev) => {
+        ev.preventDefault();
+        hideTip();
+        addIgnoreWord(word);
+        if (onIgnore) onIgnore();
+      });
+      tip.appendChild(add);
     }
     const controllers = /* @__PURE__ */ new WeakMap();
+    const liveControllers = /* @__PURE__ */ new Set();
+    function rerunAll() {
+      for (const c of liveControllers) c.scheduleCheck();
+    }
+    function destroyAll() {
+      for (const c of [...liveControllers]) c.destroy();
+    }
     function classify(el) {
       if (!el || el.closest(".mn-spell-tip")) return null;
       if (el.tagName === "TEXTAREA") {
@@ -189,6 +235,7 @@
         window.addEventListener("resize", this.onReposition);
         this.ro = new ResizeObserver(() => this.onReposition());
         this.ro.observe(el);
+        liveControllers.add(this);
         this.scheduleCheck();
       }
       destroy() {
@@ -201,6 +248,7 @@
         this.ro.disconnect();
         this.mirror.remove();
         controllers.delete(this.el);
+        liveControllers.delete(this);
       }
       reposition() {
         const el = this.el;
@@ -245,7 +293,7 @@
           return;
         }
         const wrong = new Set(await checkWords([...seen]));
-        this.misspelled = tokens.filter((t) => wrong.has(t.word));
+        this.misspelled = tokens.filter((t) => wrong.has(t.word) && !ignoreSet.has(t.word));
         this.render(text);
       }
       render(text) {
@@ -272,8 +320,17 @@
       handleClick(e) {
         const pos = this.el.selectionStart;
         const hit = this.misspelled.find((t) => pos >= t.start && pos <= t.end);
-        if (hit) showTip(hit.word, e.clientX, e.clientY, (s) => this.applyFix(hit, s));
-        else hideTip();
+        if (hit) {
+          showTip(
+            hit.word,
+            e.clientX,
+            e.clientY,
+            (s) => this.applyFix(hit, s),
+            () => this.scheduleCheck()
+          );
+        } else {
+          hideTip();
+        }
       }
       applyFix(token, replacement) {
         const el = this.el;
@@ -305,6 +362,9 @@
         window.addEventListener("resize", this.onReposition);
         this.ro = new ResizeObserver(() => this.onReposition());
         this.ro.observe(host);
+        this.mo = new MutationObserver(() => this.scheduleCheck());
+        this.mo.observe(host, { childList: true, characterData: true, subtree: true });
+        liveControllers.add(this);
         this.scheduleCheck();
       }
       destroy() {
@@ -314,8 +374,10 @@
         window.removeEventListener("scroll", this.onReposition, true);
         window.removeEventListener("resize", this.onReposition);
         this.ro.disconnect();
+        this.mo.disconnect();
         this.layer.remove();
         controllers.delete(this.host);
+        liveControllers.delete(this);
       }
       // Build the flat text plus a map of text-node segments for offset->Range.
       buildTextMap() {
@@ -373,7 +435,7 @@
         const wrong = new Set(await checkWords([...seen]));
         this.misspelled = [];
         for (const t of tokens) {
-          if (!wrong.has(t.word)) continue;
+          if (!wrong.has(t.word) || ignoreSet.has(t.word)) continue;
           const range = this.rangeFor(segments, t.start, t.end);
           if (range) this.misspelled.push({ word: t.word, range });
         }
@@ -412,7 +474,13 @@
             if (e.clientX >= r.left - PAD && e.clientX <= r.right + PAD && e.clientY >= r.top - PAD && e.clientY <= r.bottom + PAD) {
               const token = this.tokenForWord(segments, m);
               if (token) {
-                showTip(m.word, e.clientX, e.clientY, (s) => this.applyFix(segments, token, s));
+                showTip(
+                  m.word,
+                  e.clientX,
+                  e.clientY,
+                  (s) => this.applyFix(segments, token, s),
+                  () => this.scheduleCheck()
+                );
                 return;
               }
             }
@@ -458,7 +526,45 @@
         controllers.set(el, new MirrorController(el));
       }
     }
-    document.addEventListener("focusin", (e) => attach(e.target));
-    if (document.activeElement) attach(document.activeElement);
+    let observeTimer = null;
+    function startObserver() {
+      const mo = new MutationObserver(() => {
+        clearTimeout(observeTimer);
+        observeTimer = setTimeout(() => {
+          for (const c of [...liveControllers]) {
+            const node = c.el || c.host;
+            if (!node || !node.isConnected) c.destroy();
+          }
+          if (isActive() && document.activeElement) attach(document.activeElement);
+        }, 400);
+      });
+      mo.observe(document.documentElement, { childList: true, subtree: true });
+    }
+    async function boot() {
+      await loadSettings();
+      document.addEventListener("focusin", (e) => {
+        if (isActive()) attach(e.target);
+      });
+      if (isActive() && document.activeElement) attach(document.activeElement);
+      startObserver();
+    }
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== "local") return;
+      if ("mnEnabled" in changes) enabledGlobal = changes.mnEnabled.newValue !== false;
+      if ("mnDisabledHosts" in changes) {
+        siteDisabled = !!(changes.mnDisabledHosts.newValue || {})[HOST];
+      }
+      if ("mnIgnore" in changes) {
+        ignoreSet.clear();
+        for (const w of changes.mnIgnore.newValue || []) ignoreSet.add(w);
+      }
+      if (isActive()) {
+        if (document.activeElement) attach(document.activeElement);
+        rerunAll();
+      } else {
+        destroyAll();
+      }
+    });
+    boot();
   })();
 })();

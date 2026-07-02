@@ -12,6 +12,15 @@
     <span class="status" id="status">Толь ачаалж байна…</span>
   </header>
 
+  <div class="settings">
+    <label class="toggle"><input type="checkbox" id="tgGlobal" /> <span>Идэвхтэй</span></label>
+    <label class="toggle"><input type="checkbox" id="tgSite" /> <span id="siteLabel">Энэ сайт дээр</span></label>
+    <span class="spacer"></span>
+    <button id="ignoreBtn" class="linkbtn" type="button">Миний толь (0)</button>
+  </div>
+
+  <div class="ignore-panel" id="ignorePanel" hidden></div>
+
   <div class="editor">
     <div class="mirror" id="mirror"><div class="mirror-inner" id="mirrorInner"></div></div>
     <textarea id="input" spellcheck="false" placeholder="Энд монгол бичвэрээ оруулна уу..."></textarea>

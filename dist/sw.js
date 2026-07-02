@@ -4915,7 +4915,12 @@
   chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     if (info.menuItemId !== "mn-check-selection" || !info.selectionText) return;
     const words = tokenize(info.selectionText);
-    const wrong = await checkWords([...new Set(words)]);
+    let wrong = await checkWords([...new Set(words)]);
+    const { mnIgnore } = await chrome.storage.local.get("mnIgnore");
+    if (mnIgnore?.length) {
+      const ignore = new Set(mnIgnore);
+      wrong = wrong.filter((w) => !ignore.has(w));
+    }
     await chrome.storage.session.set({
       lastSelectionCheck: {
         text: info.selectionText,

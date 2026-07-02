@@ -26,6 +26,10 @@ WebAssembly.
   in a dedicated editor.
 - **Right-click selection** – select Mongolian text on a page, right-click →
   *Монгол алдаа шалгах* to count errors and open them in the popup.
+- **Personal dictionary** – click *＋ Толинд нэмэх* on any flagged word to
+  mark it correct everywhere; manage the list from the popup.
+- **On/off controls** – toggle checking globally or per-site from the popup
+  (handy for code editors or sites where it gets in the way).
 
 ## What it does *not* do
 
@@ -103,7 +107,8 @@ content.js  ──port──►  sw.js (service worker)  ──►  hunspell-asm
 
 ## Roadmap
 
-- Per-site enable/disable and a personal "ignore words" list.
+- Chrome Web Store listing and a Firefox port.
+- User-contributed supplemental word forms to reduce false positives.
 
 ## Credits
 
