@@ -3,22 +3,26 @@
 // unmodified content script (content.js) works without an extension installed.
 
 import { loadModule } from 'hunspell-asm';
+import { parseWordList } from '../src/wordlist.js';
 
 let hun = null;
 let ready = null;
+let supplement = new Set();
 
 async function init() {
   if (ready) return ready;
   ready = (async () => {
     const factory = await loadModule();
-    const [aff, dic] = await Promise.all([
+    const [aff, dic, supp] = await Promise.all([
       fetch('mn_MN.aff').then((r) => r.arrayBuffer()),
       fetch('mn_MN.dic').then((r) => r.arrayBuffer()),
+      fetch('supplement.txt').then((r) => r.text()).catch(() => ''),
     ]);
     hun = factory.create(
       factory.mountBuffer(new Uint8Array(aff), 'mn_MN.aff'),
       factory.mountBuffer(new Uint8Array(dic), 'mn_MN.dic')
     );
+    supplement = parseWordList(supp);
     window.dispatchEvent(new Event('mn-ready'));
   })();
   return ready;
@@ -27,7 +31,10 @@ async function init() {
 async function handle(message) {
   await init();
   if (message.type === 'check') {
-    return { ok: true, wrong: (message.words || []).filter((w) => !hun.spell(w)) };
+    return {
+      ok: true,
+      wrong: (message.words || []).filter((w) => !supplement.has(w) && !hun.spell(w)),
+    };
   }
   if (message.type === 'suggest') {
     return { ok: true, suggestions: hun.suggest(message.word).slice(0, 8) };

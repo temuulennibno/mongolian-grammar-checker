@@ -4850,11 +4850,25 @@
     return tokenize(text).tokens.map((t) => t.word);
   }
 
+  // src/wordlist.js
+  function parseWordList(text) {
+    const set = /* @__PURE__ */ new Set();
+    if (typeof text !== "string") return set;
+    for (const raw of text.split(/\r?\n/)) {
+      const line = raw.trim();
+      if (!line || line.startsWith("#")) continue;
+      set.add(line);
+    }
+    return set;
+  }
+
   // src/sw.js
   var DIC_URL = chrome.runtime.getURL("dict/mn_MN.dic");
   var AFF_URL = chrome.runtime.getURL("dict/mn_MN.aff");
+  var SUPPLEMENT_URL = chrome.runtime.getURL("dict/supplement.txt");
   var hunspell = null;
   var initPromise = null;
+  var supplement = /* @__PURE__ */ new Set();
   var spellCache = /* @__PURE__ */ new Map();
   var suggestCache = /* @__PURE__ */ new Map();
   var MAX_CACHE = 5e3;
@@ -4870,13 +4884,15 @@
     if (initPromise) return initPromise;
     initPromise = (async () => {
       const factory = await (0, import_hunspell_asm.loadModule)();
-      const [affBuf, dicBuf] = await Promise.all([
+      const [affBuf, dicBuf, suppText] = await Promise.all([
         fetch(AFF_URL).then((r) => r.arrayBuffer()),
-        fetch(DIC_URL).then((r) => r.arrayBuffer())
+        fetch(DIC_URL).then((r) => r.arrayBuffer()),
+        fetch(SUPPLEMENT_URL).then((r) => r.text()).catch(() => "")
       ]);
       const affPath = factory.mountBuffer(new Uint8Array(affBuf), "mn_MN.aff");
       const dicPath = factory.mountBuffer(new Uint8Array(dicBuf), "mn_MN.dic");
       hunspell = factory.create(affPath, dicPath);
+      supplement = parseWordList(suppText);
       return hunspell;
     })();
     try {
@@ -4887,6 +4903,7 @@
     }
   }
   function isCorrect(word) {
+    if (supplement.has(word)) return true;
     if (spellCache.has(word)) return spellCache.get(word);
     const ok = hunspell.spell(word);
     return remember(spellCache, word, ok);

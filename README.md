@@ -11,6 +11,7 @@ WebAssembly.
 
 ![Mongolian Spell Checker in action](assets/demo.gif)
 
+[![CI](https://github.com/temuulennibno/mongolian-grammar-checker/actions/workflows/ci.yml/badge.svg)](https://github.com/temuulennibno/mongolian-grammar-checker/actions/workflows/ci.yml)
 ![Manifest V3](https://img.shields.io/badge/Manifest-V3-blue)
 ![Offline](https://img.shields.io/badge/runs-100%25%20offline-success)
 ![License: MIT](https://img.shields.io/badge/code-MIT-green)
@@ -98,17 +99,38 @@ content.js  ──port──►  sw.js (service worker)  ──►  hunspell-asm
 | `manifest.json` | MV3 manifest (CSP allows `wasm-unsafe-eval`) |
 | `src/sw.js` | Service-worker engine (bundled → `dist/sw.js`) |
 | `src/content.js` | Inline field checker (bundled → `dist/content.js`) |
+| `src/tokenize.js` | Shared Mongolian-word tokenizer (content + worker) |
+| `src/wordlist.js` | Parser for the supplemental allowlist |
 | `src/content.css` | Highlight + suggestion-tooltip styles |
 | `popup/` | Toolbar popup quick-checker |
-| `dict/` | `mn_MN.aff` + `mn_MN.dic` from [dict-mn](https://github.com/bataak/dict-mn) |
+| `dict/` | `mn_MN.aff` + `mn_MN.dic` from [dict-mn](https://github.com/bataak/dict-mn), plus `supplement.txt` |
 | `build.mjs` | esbuild bundling (forces CJS `main` to avoid a nanoid bug) |
 | `generate-icons.mjs` | Generates `icons/*.png` |
-| `test/` | Standalone browser harness used to verify the WASM engine |
+| `test/` | `node:test` unit tests + a standalone browser engine harness |
+
+## Reducing false positives
+
+dict-mn is large but not exhaustive, so some valid words get flagged. Two ways
+to fix that:
+
+- **Per user**: click *＋ Толинд нэмэх* on a flagged word to add it to your
+  personal dictionary (`chrome.storage.local`).
+- **For everyone**: add the word to [`dict/supplement.txt`](dict/supplement.txt)
+  (one word per line) and open a PR. Entries there are treated as always-correct
+  by the shipped extension.
+
+## Development
+
+```bash
+npm test        # unit tests for the tokenizer and word-list parser
+npm run build   # bundle dist/sw.js and dist/content.js
+```
+
+CI (`.github/workflows/ci.yml`) runs the tests and build on every push and PR.
 
 ## Roadmap
 
 - Chrome Web Store listing and a Firefox port.
-- User-contributed supplemental word forms to reduce false positives.
 
 ## Credits
 

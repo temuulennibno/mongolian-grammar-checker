@@ -24,6 +24,7 @@ copyFileSync('dist/content.js', 'demo/content.js');
 copyFileSync('src/content.css', 'demo/content.css');
 copyFileSync('dict/mn_MN.aff', 'demo/mn_MN.aff');
 copyFileSync('dict/mn_MN.dic', 'demo/mn_MN.dic');
+copyFileSync('dict/supplement.txt', 'demo/supplement.txt');
 
 console.log('Demo ready in demo/. Serve it, e.g.:');
 console.log('  npx serve demo   (or)   python3 -m http.server -d demo 8000');

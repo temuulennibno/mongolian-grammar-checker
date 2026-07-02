@@ -19,6 +19,7 @@ const INCLUDE = [
   'icons/icon128.png',
   'dict/mn_MN.aff',
   'dict/mn_MN.dic',
+  'dict/supplement.txt',
   'dict/LICENSE',
 ];
 

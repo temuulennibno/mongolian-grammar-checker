@@ -8,12 +8,15 @@
 
 import { loadModule } from 'hunspell-asm';
 import { tokenizeWords } from './tokenize.js';
+import { parseWordList } from './wordlist.js';
 
 const DIC_URL = chrome.runtime.getURL('dict/mn_MN.dic');
 const AFF_URL = chrome.runtime.getURL('dict/mn_MN.aff');
+const SUPPLEMENT_URL = chrome.runtime.getURL('dict/supplement.txt');
 
 let hunspell = null;
 let initPromise = null;
+let supplement = new Set(); // shipped allowlist of words to treat as correct
 
 // Small LRU-ish cache so repeated words (very common while typing) are free.
 const spellCache = new Map();
@@ -35,13 +38,15 @@ async function init() {
 
   initPromise = (async () => {
     const factory = await loadModule();
-    const [affBuf, dicBuf] = await Promise.all([
+    const [affBuf, dicBuf, suppText] = await Promise.all([
       fetch(AFF_URL).then((r) => r.arrayBuffer()),
       fetch(DIC_URL).then((r) => r.arrayBuffer()),
+      fetch(SUPPLEMENT_URL).then((r) => r.text()).catch(() => ''),
     ]);
     const affPath = factory.mountBuffer(new Uint8Array(affBuf), 'mn_MN.aff');
     const dicPath = factory.mountBuffer(new Uint8Array(dicBuf), 'mn_MN.dic');
     hunspell = factory.create(affPath, dicPath);
+    supplement = parseWordList(suppText);
     return hunspell;
   })();
 
@@ -54,6 +59,7 @@ async function init() {
 }
 
 function isCorrect(word) {
+  if (supplement.has(word)) return true; // shipped allowlist wins
   if (spellCache.has(word)) return spellCache.get(word);
   const ok = hunspell.spell(word);
   return remember(spellCache, word, ok);

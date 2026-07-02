@@ -1,0 +1,11 @@
+# Supplemental Mongolian word list — treated as always-correct by the checker.
+#
+# Add valid words that dict-mn flags as typos (common inflections, loanwords,
+# proper nouns). One word per line. Lines starting with '#' are comments.
+# Matching is case-sensitive: add a capitalized variant on its own line if a
+# word also appears at the start of a sentence.
+#
+# Keep this list conservative — anything added here will NEVER be flagged, so
+# only add words you are confident are correct. Contributions welcome via PR.
+#
+# --- entries below this line ---

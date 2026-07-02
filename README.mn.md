@@ -11,6 +11,7 @@
 
 ![Mongolian Spell Checker in action](assets/demo.gif)
 
+[![CI](https://github.com/temuulennibno/mongolian-grammar-checker/actions/workflows/ci.yml/badge.svg)](https://github.com/temuulennibno/mongolian-grammar-checker/actions/workflows/ci.yml)
 ![Manifest V3](https://img.shields.io/badge/Manifest-V3-blue)
 ![Offline](https://img.shields.io/badge/runs-100%25%20offline-success)
 ![License: MIT](https://img.shields.io/badge/code-MIT-green)
