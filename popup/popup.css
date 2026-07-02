@@ -294,7 +294,8 @@ html, body {
   cursor: pointer;
   font: inherit;
 }
-.tip-item:hover { background: #eef3ff; color: #1d4ed8; }
+.tip-item:hover,
+.tip-item.active { background: #eef3ff; color: #1d4ed8; }
 
 .tip-none { padding: 7px 8px; color: #9096a0; font-style: italic; }
 
@@ -312,4 +313,5 @@ html, body {
   font: inherit;
   color: #1a7f37;
 }
-.tip-add:hover { background: #e9f6ee; }
+.tip-add:hover,
+.tip-add.active { background: #e9f6ee; }

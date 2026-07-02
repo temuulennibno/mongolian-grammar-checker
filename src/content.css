@@ -93,7 +93,8 @@
   color: inherit;
 }
 
-.mn-spell-tip-item:hover {
+.mn-spell-tip-item:hover,
+.mn-spell-tip-item.mn-spell-tip-active {
   background: #eef3ff;
   color: #1d4ed8;
 }
@@ -121,6 +122,7 @@
   color: #1a7f37;
 }
 
-.mn-spell-tip-add:hover {
+.mn-spell-tip-add:hover,
+.mn-spell-tip-add.mn-spell-tip-active {
   background: #e9f6ee;
 }

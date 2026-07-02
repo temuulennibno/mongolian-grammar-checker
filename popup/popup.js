@@ -23,6 +23,30 @@ const KIND_META = {
   repeat: { note: 'Давхардсан үг', cls: 'mn-kind-warn' },
 };
 
+// Index of the occurrence of `needle` nearest to `target`, or -1 (used to
+// re-locate a flagged word if the text shifted before the fix was applied).
+function nearestIndex(text, needle, target) {
+  if (!needle) return -1;
+  let best = -1;
+  let bestDist = Infinity;
+  let i = text.indexOf(needle);
+  while (i !== -1) {
+    const d = Math.abs(i - target);
+    if (d < bestDist) { bestDist = d; best = i; }
+    i = text.indexOf(needle, i + 1);
+  }
+  return best;
+}
+
+let tipActions = [];
+let tipIndex = -1;
+let tipKeyHandler = null;
+
+function setTipActive(i) {
+  tipIndex = i;
+  tipActions.forEach((a, idx) => a.el.classList.toggle('active', idx === i));
+}
+
 const input = document.getElementById('input');
 const mirror = document.getElementById('mirror');
 const mirrorInner = document.getElementById('mirrorInner');
@@ -287,42 +311,80 @@ async function showTip(token, x, y) {
     tip.appendChild(none);
   }
 
+  const actions = [];
+  const addAction = (el, run) => {
+    const idx = actions.push({ el, run }) - 1;
+    el.addEventListener('click', run);
+    el.addEventListener('mouseenter', () => setTipActive(idx));
+    tip.appendChild(el);
+  };
+
   for (const s of suggestions) {
     const item = document.createElement('button');
     item.type = 'button';
     item.className = 'tip-item';
     item.textContent = s.label;
-    item.addEventListener('click', () => applyFix(token, s.value));
-    tip.appendChild(item);
+    addAction(item, () => applyFix(token, s.value));
   }
 
   if (!token.kind || token.kind === 'spell') {
-  const add = document.createElement('button');
-  add.type = 'button';
-  add.className = 'tip-add';
-  add.textContent = '＋ Толинд нэмэх';
-  add.addEventListener('click', () => {
-    hideTip();
-    addIgnoreWord(token.word);
-  });
-  tip.appendChild(add);
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'tip-add';
+    add.textContent = '＋ Толинд нэмэх';
+    addAction(add, () => {
+      hideTip();
+      addIgnoreWord(token.word);
+    });
   }
+
+  tipActions = actions;
+  setTipActive(actions.length ? 0 : -1);
+
+  tipKeyHandler = (e) => {
+    if (tip.hidden || !tipActions.length) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setTipActive((tipIndex + 1) % tipActions.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setTipActive((tipIndex - 1 + tipActions.length) % tipActions.length);
+    } else if (e.key === 'Enter' && tipIndex >= 0) {
+      e.preventDefault();
+      tipActions[tipIndex].run();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      hideTip();
+    }
+  };
+  document.addEventListener('keydown', tipKeyHandler, true);
 }
 
 function hideTip() {
   tip.hidden = true;
   tip.textContent = '';
+  if (tipKeyHandler) {
+    document.removeEventListener('keydown', tipKeyHandler, true);
+    tipKeyHandler = null;
+  }
+  tipActions = [];
+  tipIndex = -1;
 }
 
 function applyFix(token, replacement) {
   const value = input.value;
-  if (value.slice(token.start, token.end) !== token.word) {
-    hideTip();
-    schedule();
-    return;
+  let start = token.start;
+  if (value.slice(start, start + token.word.length) !== token.word) {
+    start = nearestIndex(value, token.word, token.start); // re-locate if shifted
+    if (start < 0) {
+      hideTip();
+      schedule();
+      return;
+    }
   }
-  input.value = value.slice(0, token.start) + replacement + value.slice(token.end);
-  const caret = token.start + replacement.length;
+  const end = start + token.word.length;
+  input.value = value.slice(0, start) + replacement + value.slice(end);
+  const caret = start + replacement.length;
   input.setSelectionRange(caret, caret);
   input.focus();
   hideTip();

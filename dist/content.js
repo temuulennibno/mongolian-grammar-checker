@@ -192,6 +192,9 @@
     }
     let tipEl = null;
     let tipCloser = null;
+    let tipKeyHandler = null;
+    let tipActions = [];
+    let tipIndex = -1;
     function hideTip() {
       if (tipEl) {
         tipEl.remove();
@@ -201,6 +204,16 @@
         document.removeEventListener("mousedown", tipCloser, true);
         tipCloser = null;
       }
+      if (tipKeyHandler) {
+        document.removeEventListener("keydown", tipKeyHandler, true);
+        tipKeyHandler = null;
+      }
+      tipActions = [];
+      tipIndex = -1;
+    }
+    function setTipActive(i) {
+      tipIndex = i;
+      tipActions.forEach((a, idx) => a.el.classList.toggle("mn-spell-tip-active", idx === i));
     }
     function normSuggestion(s) {
       return typeof s === "string" ? { label: s, value: s } : s;
@@ -246,31 +259,58 @@
         none.textContent = "\u0421\u0430\u043D\u0430\u043B \u0430\u043B\u0433\u0430";
         tip.appendChild(none);
       }
+      const actions = [];
+      const addAction = (el, run) => {
+        const action = { el, run };
+        const idx = actions.push(action) - 1;
+        el.addEventListener("mousedown", (ev) => {
+          ev.preventDefault();
+          run();
+        });
+        el.addEventListener("mouseenter", () => setTipActive(idx));
+        tip.appendChild(el);
+        return action;
+      };
       for (const s of suggestions) {
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "mn-spell-tip-item";
         btn.textContent = s.label;
-        btn.addEventListener("mousedown", (ev) => {
-          ev.preventDefault();
+        addAction(btn, () => {
           hideTip();
           onPick(s.value);
         });
-        tip.appendChild(btn);
       }
       if (!item.kind || item.kind === "spell") {
         const add = document.createElement("button");
         add.type = "button";
         add.className = "mn-spell-tip-add";
         add.textContent = "\uFF0B \u0422\u043E\u043B\u0438\u043D\u0434 \u043D\u044D\u043C\u044D\u0445";
-        add.addEventListener("mousedown", (ev) => {
-          ev.preventDefault();
+        addAction(add, () => {
           hideTip();
           addIgnoreWord(item.word);
           if (onIgnore) onIgnore();
         });
-        tip.appendChild(add);
       }
+      tipActions = actions;
+      setTipActive(actions.length ? 0 : -1);
+      tipKeyHandler = (e) => {
+        if (!tipEl || !tipActions.length) return;
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setTipActive((tipIndex + 1) % tipActions.length);
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setTipActive((tipIndex - 1 + tipActions.length) % tipActions.length);
+        } else if (e.key === "Enter" && tipIndex >= 0) {
+          e.preventDefault();
+          tipActions[tipIndex].run();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          hideTip();
+        }
+      };
+      document.addEventListener("keydown", tipKeyHandler, true);
     }
     const controllers = /* @__PURE__ */ new WeakMap();
     const liveControllers = /* @__PURE__ */ new Set();
@@ -292,6 +332,21 @@
       }
       if (el.isContentEditable) return "editable";
       return null;
+    }
+    function nearestIndex(text, needle, target) {
+      if (!needle) return -1;
+      let best = -1;
+      let bestDist = Infinity;
+      let i = text.indexOf(needle);
+      while (i !== -1) {
+        const d = Math.abs(i - target);
+        if (d < bestDist) {
+          bestDist = d;
+          best = i;
+        }
+        i = text.indexOf(needle, i + 1);
+      }
+      return best;
     }
     function mergeFlags(spell, extra) {
       const kept = spell.filter(
@@ -458,11 +513,16 @@
       applyFix(token, replacement) {
         const el = this.el;
         const value = el.value;
-        if (value.slice(token.start, token.end) !== token.word) return this.scheduleCheck();
-        const next = value.slice(0, token.start) + replacement + value.slice(token.end);
+        let start = token.start;
+        if (value.slice(start, start + token.word.length) !== token.word) {
+          start = nearestIndex(value, token.word, token.start);
+          if (start < 0) return this.scheduleCheck();
+        }
+        const end = start + token.word.length;
+        const next = value.slice(0, start) + replacement + value.slice(end);
         setNativeValue(el, next);
         el.dispatchEvent(new Event("input", { bubbles: true }));
-        const caret = token.start + replacement.length;
+        const caret = start + replacement.length;
         el.setSelectionRange(caret, caret);
         el.focus();
         this.scheduleCheck();
@@ -608,20 +668,31 @@
         hideTip();
       }
       applyFix(item, replacement) {
-        const range = item.range;
-        let ok = false;
-        try {
-          ok = range && range.toString() === item.word;
-        } catch {
-          ok = false;
-        }
-        if (!ok) return this.scheduleCheck();
+        const range = this.resolveRange(item);
+        if (!range) return this.scheduleCheck();
         range.deleteContents();
         if (replacement) range.insertNode(document.createTextNode(replacement));
         this.host.normalize();
         this.host.dispatchEvent(new InputEvent("input", { bubbles: true }));
         this.host.focus();
         this.scheduleCheck();
+      }
+      // Return a valid range for the flagged word, re-locating it in the current
+      // DOM if the range captured at draw time went stale (edits, re-renders).
+      resolveRange(item) {
+        try {
+          if (item.range && item.range.toString() === item.word) return item.range;
+        } catch {
+        }
+        const { text, segments } = this.buildTextMap();
+        const pos = nearestIndex(text, item.word, item.start ?? 0);
+        if (pos < 0) return null;
+        const range = this.rangeFor(segments, pos, pos + item.word.length);
+        try {
+          if (range && range.toString() === item.word) return range;
+        } catch {
+        }
+        return null;
       }
     }
     function attach(el) {

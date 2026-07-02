@@ -97,6 +97,9 @@ import { detectExtras } from './checks.js';
   // ---- shared suggestion tooltip ------------------------------------------
   let tipEl = null;
   let tipCloser = null;
+  let tipKeyHandler = null;
+  let tipActions = []; // [{ el, run }] — keyboard-navigable rows
+  let tipIndex = -1;
 
   function hideTip() {
     if (tipEl) {
@@ -107,6 +110,17 @@ import { detectExtras } from './checks.js';
       document.removeEventListener('mousedown', tipCloser, true);
       tipCloser = null;
     }
+    if (tipKeyHandler) {
+      document.removeEventListener('keydown', tipKeyHandler, true);
+      tipKeyHandler = null;
+    }
+    tipActions = [];
+    tipIndex = -1;
+  }
+
+  function setTipActive(i) {
+    tipIndex = i;
+    tipActions.forEach((a, idx) => a.el.classList.toggle('mn-spell-tip-active', idx === i));
   }
 
   // Normalize a suggestion (plain string or {label, value}) to {label, value}.
@@ -165,17 +179,24 @@ import { detectExtras } from './checks.js';
       none.textContent = 'Санал алга';
       tip.appendChild(none);
     }
+
+    // Build keyboard-navigable rows: suggestions, then optional "add".
+    const actions = [];
+    const addAction = (el, run) => {
+      const action = { el, run };
+      const idx = actions.push(action) - 1;
+      el.addEventListener('mousedown', (ev) => { ev.preventDefault(); run(); });
+      el.addEventListener('mouseenter', () => setTipActive(idx));
+      tip.appendChild(el);
+      return action;
+    };
+
     for (const s of suggestions) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'mn-spell-tip-item';
       btn.textContent = s.label;
-      btn.addEventListener('mousedown', (ev) => {
-        ev.preventDefault();
-        hideTip();
-        onPick(s.value);
-      });
-      tip.appendChild(btn);
+      addAction(btn, () => { hideTip(); onPick(s.value); });
     }
 
     // "Add to my dictionary" only makes sense for genuine spelling flags.
@@ -184,14 +205,35 @@ import { detectExtras } from './checks.js';
       add.type = 'button';
       add.className = 'mn-spell-tip-add';
       add.textContent = '＋ Толинд нэмэх';
-      add.addEventListener('mousedown', (ev) => {
-        ev.preventDefault();
+      addAction(add, () => {
         hideTip();
         addIgnoreWord(item.word);
         if (onIgnore) onIgnore();
       });
-      tip.appendChild(add);
     }
+
+    tipActions = actions;
+    setTipActive(actions.length ? 0 : -1);
+
+    // Arrow keys move the selection, Enter applies it, Esc dismisses. Typing
+    // otherwise passes straight through to the field.
+    tipKeyHandler = (e) => {
+      if (!tipEl || !tipActions.length) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setTipActive((tipIndex + 1) % tipActions.length);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setTipActive((tipIndex - 1 + tipActions.length) % tipActions.length);
+      } else if (e.key === 'Enter' && tipIndex >= 0) {
+        e.preventDefault();
+        tipActions[tipIndex].run();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        hideTip();
+      }
+    };
+    document.addEventListener('keydown', tipKeyHandler, true);
   }
 
   // ---- field classification ------------------------------------------------
@@ -218,6 +260,22 @@ import { detectExtras } from './checks.js';
     }
     if (el.isContentEditable) return 'editable';
     return null;
+  }
+
+  // Index of the occurrence of `needle` in `text` closest to `target`, or -1.
+  // Used to re-locate a flagged word when its stored position/range went stale
+  // (the field changed between drawing the flag and clicking the fix).
+  function nearestIndex(text, needle, target) {
+    if (!needle) return -1;
+    let best = -1;
+    let bestDist = Infinity;
+    let i = text.indexOf(needle);
+    while (i !== -1) {
+      const d = Math.abs(i - target);
+      if (d < bestDist) { bestDist = d; best = i; }
+      i = text.indexOf(needle, i + 1);
+    }
+    return best;
   }
 
   // Combine spelling flags with the extra (homoglyph/repeat) flags, dropping any
@@ -394,11 +452,16 @@ import { detectExtras } from './checks.js';
     applyFix(token, replacement) {
       const el = this.el;
       const value = el.value;
-      if (value.slice(token.start, token.end) !== token.word) return this.scheduleCheck();
-      const next = value.slice(0, token.start) + replacement + value.slice(token.end);
+      let start = token.start;
+      if (value.slice(start, start + token.word.length) !== token.word) {
+        start = nearestIndex(value, token.word, token.start); // re-locate if shifted
+        if (start < 0) return this.scheduleCheck();
+      }
+      const end = start + token.word.length;
+      const next = value.slice(0, start) + replacement + value.slice(end);
       setNativeValue(el, next);
       el.dispatchEvent(new Event('input', { bubbles: true }));
-      const caret = token.start + replacement.length;
+      const caret = start + replacement.length;
       el.setSelectionRange(caret, caret);
       el.focus();
       this.scheduleCheck();
@@ -575,12 +638,8 @@ import { detectExtras } from './checks.js';
     }
 
     applyFix(item, replacement) {
-      const range = item.range;
-      let ok = false;
-      try {
-        ok = range && range.toString() === item.word;
-      } catch { ok = false; }
-      if (!ok) return this.scheduleCheck();
+      const range = this.resolveRange(item);
+      if (!range) return this.scheduleCheck();
       range.deleteContents();
       if (replacement) range.insertNode(document.createTextNode(replacement));
       this.host.normalize();
@@ -588,6 +647,22 @@ import { detectExtras } from './checks.js';
       this.host.dispatchEvent(new InputEvent('input', { bubbles: true }));
       this.host.focus();
       this.scheduleCheck();
+    }
+
+    // Return a valid range for the flagged word, re-locating it in the current
+    // DOM if the range captured at draw time went stale (edits, re-renders).
+    resolveRange(item) {
+      try {
+        if (item.range && item.range.toString() === item.word) return item.range;
+      } catch { /* detached range */ }
+      const { text, segments } = this.buildTextMap();
+      const pos = nearestIndex(text, item.word, item.start ?? 0);
+      if (pos < 0) return null;
+      const range = this.rangeFor(segments, pos, pos + item.word.length);
+      try {
+        if (range && range.toString() === item.word) return range;
+      } catch { /* ignore */ }
+      return null;
     }
   }
 
