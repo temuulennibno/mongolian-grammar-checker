@@ -7,6 +7,7 @@
 // mid-session.
 
 import { loadModule } from 'hunspell-asm';
+import { tokenizeWords } from './tokenize.js';
 
 const DIC_URL = chrome.runtime.getURL('dict/mn_MN.dic');
 const AFF_URL = chrome.runtime.getURL('dict/mn_MN.aff');
@@ -126,7 +127,7 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId !== 'mn-check-selection' || !info.selectionText) return;
-  const words = tokenize(info.selectionText);
+  const words = tokenizeWords(info.selectionText);
   let wrong = await checkWords([...new Set(words)]);
   const { mnIgnore } = await chrome.storage.local.get('mnIgnore');
   if (mnIgnore?.length) {
@@ -145,9 +146,3 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     chrome.action.setBadgeText({ text: wrong.length ? String(wrong.length) : '✓' });
   }
 });
-
-// Shared tokenizer (kept in sync with content.js MN_WORD).
-function tokenize(text) {
-  const matches = text.match(/[А-Яа-яЁёӨөҮү]+/g);
-  return matches || [];
-}

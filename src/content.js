@@ -10,8 +10,9 @@
 // In both cases the user's own content is never modified until they apply a
 // suggestion.
 
+import { tokenize } from './tokenize.js';
+
 (() => {
-  const MN_WORD = /[А-Яа-яЁёӨөҮү]+/g;
   const DEBOUNCE_MS = 300;
 
   // ---- settings (global on/off, per-site off, personal dictionary) ---------
@@ -90,31 +91,6 @@
   async function getSuggestions(word) {
     const res = await send({ type: 'suggest', word });
     return res.ok ? res.suggestions : [];
-  }
-
-  // A Cyrillic run is only treated as a real word if it isn't glued to Latin
-  // letters or digits on either side (filters out URLs, emails, code, IDs and
-  // other mixed-script tokens that would otherwise be flagged as misspellings).
-  const ADJACENT = /[A-Za-z0-9_@./\\-]/;
-
-  // Tokenize text into Mongolian words with their offsets.
-  function tokenize(text) {
-    const tokens = [];
-    const seen = new Set();
-    let m;
-    MN_WORD.lastIndex = 0;
-    while ((m = MN_WORD.exec(text)) !== null) {
-      const word = m[0];
-      const start = m.index;
-      const end = start + word.length;
-      if (word.length < 2) continue; // single letters are not worth flagging
-      const before = start > 0 ? text[start - 1] : '';
-      const after = end < text.length ? text[end] : '';
-      if (ADJACENT.test(before) || ADJACENT.test(after)) continue;
-      tokens.push({ start, end, word });
-      seen.add(word);
-    }
-    return { tokens, seen };
   }
 
   // ---- shared suggestion tooltip ------------------------------------------
@@ -530,7 +506,7 @@
     }
 
     handleClick(e) {
-      const { segments } = this.buildTextMap();
+      const { text, segments } = this.buildTextMap();
 
       // Primary: hit-test the click against each flagged word's rectangles, so
       // clicking anywhere on the underlined word opens its suggestions (a tiny
@@ -542,7 +518,7 @@
             e.clientX >= r.left - PAD && e.clientX <= r.right + PAD &&
             e.clientY >= r.top - PAD && e.clientY <= r.bottom + PAD
           ) {
-            const token = this.tokenForWord(segments, m);
+            const token = this.tokenForWord(text, segments, m);
             if (token) {
               showTip(m.word, e.clientX, e.clientY,
                 (s) => this.applyFix(segments, token, s),
@@ -558,8 +534,7 @@
 
     // Find the flat-text token matching a misspelled item, preferring the one
     // whose range starts at the same place (handles repeated words correctly).
-    tokenForWord(segments, item) {
-      const { text } = this.buildTextMap();
+    tokenForWord(text, segments, item) {
       const { tokens } = tokenize(text);
       const candidates = tokens.filter((t) => t.word === item.word);
       if (!candidates.length) return null;

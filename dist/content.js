@@ -1,7 +1,31 @@
 (() => {
+  // src/tokenize.js
+  var MN_WORD = /[А-Яа-яЁёӨөҮү]+/g;
+  var ADJACENT = /[A-Za-z0-9_@./\\-]/;
+  function isRealWord(text, start, end, word) {
+    if (word.length < 2) return false;
+    const before = start > 0 ? text[start - 1] : "";
+    const after = end < text.length ? text[end] : "";
+    return !ADJACENT.test(before) && !ADJACENT.test(after);
+  }
+  function tokenize(text) {
+    const tokens = [];
+    const seen = /* @__PURE__ */ new Set();
+    let m;
+    MN_WORD.lastIndex = 0;
+    while ((m = MN_WORD.exec(text)) !== null) {
+      const word = m[0];
+      const start = m.index;
+      const end = start + word.length;
+      if (!isRealWord(text, start, end, word)) continue;
+      tokens.push({ start, end, word });
+      seen.add(word);
+    }
+    return { tokens, seen };
+  }
+
   // src/content.js
   (() => {
-    const MN_WORD = /[А-Яа-яЁёӨөҮү]+/g;
     const DEBOUNCE_MS = 300;
     const HOST = location.hostname;
     let enabledGlobal = true;
@@ -72,25 +96,6 @@
     async function getSuggestions(word) {
       const res = await send({ type: "suggest", word });
       return res.ok ? res.suggestions : [];
-    }
-    const ADJACENT = /[A-Za-z0-9_@./\\-]/;
-    function tokenize(text) {
-      const tokens = [];
-      const seen = /* @__PURE__ */ new Set();
-      let m;
-      MN_WORD.lastIndex = 0;
-      while ((m = MN_WORD.exec(text)) !== null) {
-        const word = m[0];
-        const start = m.index;
-        const end = start + word.length;
-        if (word.length < 2) continue;
-        const before = start > 0 ? text[start - 1] : "";
-        const after = end < text.length ? text[end] : "";
-        if (ADJACENT.test(before) || ADJACENT.test(after)) continue;
-        tokens.push({ start, end, word });
-        seen.add(word);
-      }
-      return { tokens, seen };
     }
     let tipEl = null;
     let tipCloser = null;
@@ -467,12 +472,12 @@
         }
       }
       handleClick(e) {
-        const { segments } = this.buildTextMap();
+        const { text, segments } = this.buildTextMap();
         const PAD = 3;
         for (const m of this.misspelled) {
           for (const r of m.rects || []) {
             if (e.clientX >= r.left - PAD && e.clientX <= r.right + PAD && e.clientY >= r.top - PAD && e.clientY <= r.bottom + PAD) {
-              const token = this.tokenForWord(segments, m);
+              const token = this.tokenForWord(text, segments, m);
               if (token) {
                 showTip(
                   m.word,
@@ -490,8 +495,7 @@
       }
       // Find the flat-text token matching a misspelled item, preferring the one
       // whose range starts at the same place (handles repeated words correctly).
-      tokenForWord(segments, item) {
-        const { text } = this.buildTextMap();
+      tokenForWord(text, segments, item) {
         const { tokens } = tokenize(text);
         const candidates = tokens.filter((t) => t.word === item.word);
         if (!candidates.length) return null;

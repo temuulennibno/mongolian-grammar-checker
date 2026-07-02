@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "icons:placeholder": "node generate-icons.mjs",
+    "test": "node --test test/*.test.mjs",
     "build": "node build.mjs",
     "prepare-dist": "npm run build",
     "demo": "npm run build && node build-demo.mjs",

@@ -4821,6 +4821,36 @@
 
   // src/sw.js
   var import_hunspell_asm = __toESM(require_cjs2(), 1);
+
+  // src/tokenize.js
+  var MN_WORD = /[А-Яа-яЁёӨөҮү]+/g;
+  var ADJACENT = /[A-Za-z0-9_@./\\-]/;
+  function isRealWord(text, start, end, word) {
+    if (word.length < 2) return false;
+    const before = start > 0 ? text[start - 1] : "";
+    const after = end < text.length ? text[end] : "";
+    return !ADJACENT.test(before) && !ADJACENT.test(after);
+  }
+  function tokenize(text) {
+    const tokens = [];
+    const seen = /* @__PURE__ */ new Set();
+    let m;
+    MN_WORD.lastIndex = 0;
+    while ((m = MN_WORD.exec(text)) !== null) {
+      const word = m[0];
+      const start = m.index;
+      const end = start + word.length;
+      if (!isRealWord(text, start, end, word)) continue;
+      tokens.push({ start, end, word });
+      seen.add(word);
+    }
+    return { tokens, seen };
+  }
+  function tokenizeWords(text) {
+    return tokenize(text).tokens.map((t) => t.word);
+  }
+
+  // src/sw.js
   var DIC_URL = chrome.runtime.getURL("dict/mn_MN.dic");
   var AFF_URL = chrome.runtime.getURL("dict/mn_MN.aff");
   var hunspell = null;
@@ -4914,7 +4944,7 @@
   });
   chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     if (info.menuItemId !== "mn-check-selection" || !info.selectionText) return;
-    const words = tokenize(info.selectionText);
+    const words = tokenizeWords(info.selectionText);
     let wrong = await checkWords([...new Set(words)]);
     const { mnIgnore } = await chrome.storage.local.get("mnIgnore");
     if (mnIgnore?.length) {
@@ -4933,8 +4963,4 @@
       chrome.action.setBadgeText({ text: wrong.length ? String(wrong.length) : "\u2713" });
     }
   });
-  function tokenize(text) {
-    const matches = text.match(/[А-Яа-яЁёӨөҮү]+/g);
-    return matches || [];
-  }
 })();
